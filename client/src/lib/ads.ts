@@ -1,8 +1,8 @@
 export const adsConfig = {
-  clientId: import.meta.env.VITE_ADSENSE_CLIENT as string | undefined,
+  clientId: process.env.NEXT_PUBLIC_ADSENSE_CLIENT,
   slots: {
-    footer: import.meta.env.VITE_AD_SLOT_FOOTER as string | undefined,
-    marketSidebar: import.meta.env.VITE_AD_SLOT_MARKET_SIDEBAR as string | undefined,
+    footer: process.env.NEXT_PUBLIC_AD_SLOT_FOOTER,
+    marketSidebar: process.env.NEXT_PUBLIC_AD_SLOT_MARKET_SIDEBAR,
   },
 } as const;
 

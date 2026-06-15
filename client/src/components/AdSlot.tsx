@@ -1,3 +1,5 @@
+'use client';
+
 import { useEffect, useRef } from 'react';
 import { cn } from '@/lib/utils';
 import { adsConfig, isAdConfigured, loadAdSenseScript, type AdPlacement } from '@/lib/ads';
@@ -58,7 +60,7 @@ export default function AdSlot({
           Advertisement
         </p>
         <p className="mt-1 text-[11px] text-[#8a7f72]">
-          Set <code className="text-[#c9bfb0]">VITE_ADSENSE_CLIENT</code> and slot env vars to
+          Set <code className="text-[#c9bfb0]">NEXT_PUBLIC_ADSENSE_CLIENT</code> and slot env vars to
           enable ads.
         </p>
       </aside>

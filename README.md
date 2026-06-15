@@ -1,57 +1,59 @@
 # Dark and Darker Market Tracker
 
-A web app for tracking Dark and Darker marketplace prices, finding underpriced listings, and calculating craft costs.
+A Next.js web app for tracking Dark and Darker marketplace prices, finding underpriced listings, and calculating craft costs.
 
 Built on the [DarkerDB API](https://darkerdb.com/documentation/items) for live market data and price history.
 
 ## Features
 
 - **Live Market Feed** — Browse active marketplace listings
-- **Price Charts** — Historical price graphs (15m, 1h, 4h, 1d intervals) via DarkerDB analytics
-- **Deal Alerts** — Finds listings priced ≥30% below fair market value (configurable)
-- **Crafting Calculator** — All vendor craft recipes with ingredient costs at current market prices
+- **Price Charts** — Historical price graphs (15m, 1h, 4h, 1d, 1w intervals)
+- **Deal Alerts** — Finds listings priced below fair market value (configurable)
+- **Crafting Calculator** — Vendor craft recipes with ingredient costs at current market prices
 
 ## Quick Start
 
 ```bash
-# Install dependencies
 npm install
-
-# Run both server (port 3001) and client (port 5173)
 npm run dev
 ```
 
-Open [http://localhost:5173](http://localhost:5173)
+Open [http://localhost:3000](http://localhost:3000)
 
 ## Project Structure
 
 ```
 MarketTracker/
-├── client/          # React + Vite frontend
-├── server/          # Express API (proxies DarkerDB, adds analytics)
-│   └── data/
-│       └── merchant.json   # Craft recipes (from Dark and Darker Wiki)
-└── package.json     # npm workspaces root
+├── client/                 # Next.js app (App Router)
+│   ├── src/app/            # Pages + API route handlers
+│   ├── src/components/     # UI components
+│   ├── src/lib/server/     # DarkerDB + analytics logic
+│   └── data/merchant.json  # Craft recipes (wiki data)
+└── package.json            # npm workspaces root
 ```
 
 ## API Endpoints
 
+All API routes live under `/api/*` as Next.js Route Handlers:
+
 | Endpoint | Description |
 |---|---|
 | `GET /api/market` | Active marketplace listings |
+| `GET /api/market/search` | Filtered market search |
 | `GET /api/items/search?q=` | Search items by name |
 | `GET /api/prices/:archetype/history` | Price history chart data |
 | `GET /api/alerts?minProfit=30` | Underpriced listing alerts |
 | `GET /api/crafting` | All craft recipes with costs |
-| `GET /api/crafting?merchant=Leathersmith` | Filter by vendor |
 
-## How Deal Alerts Work
+## Environment Variables
 
-For each active listing, the app compares the listing price against a **fair price** calculated from the last 24 hours of weighted average trade data. If the listing is at least 30% below fair value, it appears in the Deals tab.
+Optional AdSense (copy `client/.env.example` to `client/.env.local`):
 
-## Craft Recipes
-
-Recipe data is sourced from the [Dark and Darker Wiki](https://darkanddarker.wiki.spellsandguns.com/Data:Merchant.json) (not available via DarkerDB). Ingredient costs use the lowest active listing price, falling back to recent average if no listings exist.
+```
+NEXT_PUBLIC_ADSENSE_CLIENT=
+NEXT_PUBLIC_AD_SLOT_FOOTER=
+NEXT_PUBLIC_AD_SLOT_MARKET_SIDEBAR=
+```
 
 ## Credits
 

@@ -1,4 +1,6 @@
-import { Link } from 'react-router-dom';
+'use client';
+
+import Link from 'next/link';
 import { MarketListing } from '@/api/client';
 import { cn } from '@/lib/utils';
 import { itemCardRarityClass } from '@/lib/gameTheme';
@@ -63,7 +65,7 @@ export default function MarketListingCard({ listing, attributeLabels }: MarketLi
         </div>
 
         <Link
-          to={`/item/${listing.item_id}`}
+          href={`/item/${listing.item_id}`}
           className={cn(
             'block truncate font-[Cinzel] text-base font-semibold tracking-wide no-underline hover:no-underline',
             itemCardRarityClass(listing.rarity)

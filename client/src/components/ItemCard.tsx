@@ -1,4 +1,6 @@
-import { Link } from 'react-router-dom';
+'use client';
+
+import Link from 'next/link';
 import { CraftableGearItem, rarityClass } from '@/api/client';
 import { Spotlight } from '@/components/ui/spotlight';
 import { cn } from '@/lib/utils';
@@ -11,7 +13,7 @@ export default function ItemCard({ item }: ItemCardProps) {
   const subType = item.type === 'Armor' ? item.armor_type : item.hand_type;
 
   return (
-    <Link to={`/item/${item.id}`} className="block no-underline hover:no-underline">
+    <Link href={`/item/${item.id}`} className="block no-underline hover:no-underline">
       <Spotlight
         className="h-full overflow-hidden transition-transform hover:scale-[1.02]"
         contentClassName="h-full gap-0"

@@ -1,5 +1,7 @@
+'use client';
+
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { gameInputClass, gameLabelClass, itemCardRarityClass } from '@/lib/gameTheme';
 import { addSearchHistory, readSearchHistory } from '@/lib/searchHistory';
@@ -19,7 +21,7 @@ export default function ItemSearchBar({
   label = 'Find item',
   placeholder = 'Search item name…',
 }: ItemSearchBarProps) {
-  const navigate = useNavigate();
+  const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const blurTimer = useRef<number | null>(null);
 
@@ -62,7 +64,7 @@ export default function ItemSearchBar({
     setSuggestions([]);
     setSuggestOpen(false);
     setActiveIndex(-1);
-    navigate(`/item/${encodeURIComponent(result.id)}`);
+    router.push(`/item/${encodeURIComponent(result.id)}`);
   }
 
   async function commitSearch() {

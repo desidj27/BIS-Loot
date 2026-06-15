@@ -1,0 +1,33 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-display: 'Cinzel', Georgia, serif;
+}
+
+@layer base {
+  html {
+    scrollbar-gutter: stable;
+  }
+
+  * {
+    @apply border-[#3a342c];
+  }
+
+  body {
+    @apply bg-[#080706] text-[#ddd6cb] antialiased;
+  }
+
+  a {
+    @apply text-[#c9bfb0] transition-colors hover:text-[#f0e6d8];
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}

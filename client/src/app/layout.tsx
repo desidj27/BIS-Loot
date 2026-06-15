@@ -1,5 +1,7 @@
 import type { Metadata } from 'next';
+import Script from 'next/script';
 import { Cinzel, Inter } from 'next/font/google';
+import { adsConfig } from '@/lib/ads';
 import { GridBackground } from '@/components/ui/grid-background';
 import { GameDivider } from '@/components/ui/game-panel';
 import AdSlot from '@/components/AdSlot';
@@ -25,6 +27,17 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`dark ${inter.variable} ${cinzel.variable}`}>
+      <head>
+        {adsConfig.clientId ? (
+          <Script
+            id="adsense-init"
+            async
+            src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${adsConfig.clientId}`}
+            crossOrigin="anonymous"
+            strategy="beforeInteractive"
+          />
+        ) : null}
+      </head>
       <body className="font-sans">
         <GridBackground className="flex min-h-screen flex-col">
           <header className="sticky top-0 z-50 border-b border-[#4a4338] bg-[#0c0a09]/95 backdrop-blur-sm">

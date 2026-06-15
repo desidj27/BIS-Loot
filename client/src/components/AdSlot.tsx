@@ -48,23 +48,7 @@ export default function AdSlot({
   }, [configured, placement, slotId]);
 
   if (!configured) {
-    return (
-      <aside
-        className={cn(
-          'flex min-h-[90px] flex-col items-center justify-center border border-dashed border-[#4a4338] bg-[#0a0908]/80 px-3 py-4 text-center',
-          className
-        )}
-        aria-label="Advertisement placeholder"
-      >
-        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#6b6258]">
-          Advertisement
-        </p>
-        <p className="mt-1 text-[11px] text-[#8a7f72]">
-          Set <code className="text-[#c9bfb0]">NEXT_PUBLIC_ADSENSE_CLIENT</code> and slot env vars to
-          enable ads.
-        </p>
-      </aside>
-    );
+    return null;
   }
 
   return (

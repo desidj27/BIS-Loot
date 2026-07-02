@@ -54,8 +54,8 @@ export default function Alerts() {
   const showInitialLoading = loading && opportunities.length === 0;
 
   return (
-    <div className="space-y-6">
-      <GamePanel className="p-6">
+    <div className="space-y-4 sm:space-y-6">
+      <GamePanel className="hidden p-4 sm:block sm:p-6">
         <h2 className={gameTitleClass}>Deal Alerts</h2>
         <p className={cn('mt-1', gameMutedTextClass)}>
           Scans Rare+ gear listed below recent sale prices for matching stat rolls.
@@ -68,8 +68,8 @@ export default function Alerts() {
         </div>
       )}
 
-      <div className="grid items-start gap-6 lg:grid-cols-[280px_1fr]">
-        <GamePanel className="sticky top-20 p-4">
+      <div className="grid items-start gap-4 sm:gap-6 lg:grid-cols-[280px_1fr]">
+        <GamePanel className="p-3 sm:sticky sm:top-[4.5rem] sm:p-4 lg:top-20">
           <h3 className={gameHeadingClass}>Deal Settings</h3>
           <GameDivider className="px-0" />
 
@@ -138,20 +138,20 @@ export default function Alerts() {
           </div>
         </GamePanel>
 
-        <div className="min-w-0 space-y-6">
+        <div className="min-w-0 space-y-4 sm:space-y-6">
           <GamePanel contentClassName="gap-0">
-            <div className="flex items-center justify-between px-4 py-3">
+            <div className="flex flex-col gap-2 px-3 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-4">
               <h3 className={gameHeadingClass}>Profitable Listings</h3>
               <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => loadOpportunities(true)}
                   disabled={refreshing || loading}
-                  className={cn(gameButtonClass, 'min-w-[5.5rem]')}
+                  className={cn(gameButtonClass, 'min-w-[5.5rem] flex-1 sm:flex-none')}
                 >
                   {refreshing ? 'Refreshing…' : 'Refresh'}
                 </button>
-                <span className="border border-[#4a4338] bg-[#0a0908] px-3 py-0.5 text-xs text-[#8a7f72]">
+                <span className="shrink-0 border border-[#4a4338] bg-[#0a0908] px-3 py-1 text-xs text-[#8a7f72] sm:py-0.5">
                   {opportunities.length} deals
                 </span>
               </div>

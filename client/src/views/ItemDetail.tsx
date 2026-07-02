@@ -133,9 +133,9 @@ export default function ItemDetail() {
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <ItemSearchBar className="w-full max-w-md" />
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between sm:gap-4">
+        <ItemSearchBar className="w-full sm:max-w-md" />
         <Link
           href="/"
           className="inline-block font-[Cinzel] text-sm tracking-wide text-[#8a7f72] no-underline hover:text-[#e5b56e] hover:no-underline"
@@ -144,7 +144,7 @@ export default function ItemDetail() {
         </Link>
       </div>
 
-      <GamePanel className="p-6">
+      <GamePanel className="p-4 sm:p-6">
         <h2 className={cn(gameTitleClass, itemMeta && itemCardRarityClass(itemMeta.rarity))}>
           {itemName}
         </h2>
@@ -160,11 +160,11 @@ export default function ItemDetail() {
           )}
         </p>
 
-        <div className="mt-4 grid grid-cols-[repeat(auto-fit,minmax(140px,1fr))] gap-3">
+        <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-[repeat(auto-fit,minmax(140px,1fr))] sm:gap-3">
           {marketStats.map((stat) => (
-            <div key={stat.label} className="border border-[#3a342c] bg-[#0a0908] px-4 py-3">
+            <div key={stat.label} className="border border-[#3a342c] bg-[#0a0908] px-3 py-2.5 sm:px-4 sm:py-3">
               <p className={gameLabelClass}>{stat.label}</p>
-              <p className="mt-1 font-[Cinzel] text-lg font-semibold text-[#e5b56e]">{stat.value}</p>
+              <p className="mt-1 font-[Cinzel] text-base font-semibold text-[#e5b56e] sm:text-lg">{stat.value}</p>
             </div>
           ))}
         </div>
@@ -181,15 +181,15 @@ export default function ItemDetail() {
       )}
 
       <GamePanel contentClassName="gap-0">
-        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+        <div className="flex flex-col gap-3 px-3 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:px-4">
           <h3 className={gameHeadingClass}>Price History</h3>
-          <div className="flex flex-wrap gap-1 border border-[#4a4338] bg-[#0a0908] p-1">
+          <div className="grid grid-cols-3 gap-1 border border-[#4a4338] bg-[#0a0908] p-1 sm:flex sm:flex-wrap">
             {INTERVALS.map((opt) => (
               <button
                 key={opt.value}
                 type="button"
                 className={cn(
-                  'border px-3 py-1 font-[Cinzel] text-xs tracking-wide transition-colors',
+                  'min-h-10 border px-2 py-2 font-[Cinzel] text-xs tracking-wide transition-colors sm:min-h-0 sm:px-3 sm:py-1',
                   interval === opt.value
                     ? 'border-[#8a7355] bg-[linear-gradient(180deg,#3d3020_0%,#241c14_100%)] text-[#f5d492] shadow-[0_0_10px_rgba(196,123,26,0.15)]'
                     : 'border-transparent text-[#8a7f72] hover:text-[#ddd6cb]'

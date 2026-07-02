@@ -77,8 +77,10 @@ export interface GameItem {
 type QueryParams = Record<string, string | number | boolean | undefined>;
 
 const ALL_ITEMS_CACHE_TTL_MS = 60 * 60 * 1000;
+const SEARCH_ITEMS_CACHE_TTL_MS = 30 * 60 * 1000;
 let allItemsCache: { data: GameItem[]; expiresAt: number } | null = null;
 let allItemsLoadPromise: Promise<GameItem[]> | null = null;
+const searchItemsCache = new Map<string, { data: GameItem[]; expiresAt: number }>();
 
 async function fetchApi<T>(path: string, params: QueryParams = {}): Promise<ApiResponse<T>> {
   const url = new URL(`${DARKERDB_BASE}${path}`);
@@ -251,9 +253,23 @@ export async function searchMarketListings(options: MarketSearchOptions = {}): P
 }
 
 export async function searchItems(name: string): Promise<GameItem[]> {
-  const data = await fetchApi<GameItem | GameItem[]>('/v1/items', { name });
+  const trimmed = name.trim();
+  if (!trimmed) return [];
+
+  const cacheKey = trimmed.toLowerCase();
+  const cached = searchItemsCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.data;
+  }
+
+  const data = await fetchApi<GameItem | GameItem[]>('/v1/items', { name: trimmed });
   const body = data.body;
-  return Array.isArray(body) ? body : [body];
+  const items = Array.isArray(body) ? body : [body];
+  searchItemsCache.set(cacheKey, {
+    data: items,
+    expiresAt: Date.now() + SEARCH_ITEMS_CACHE_TTL_MS,
+  });
+  return items;
 }
 
 export async function getAllItemsPaginated(): Promise<GameItem[]> {
@@ -300,6 +316,48 @@ export async function getLowestListingPrice(archetype: string): Promise<number |
   if (active.length === 0) return null;
 
   return Math.min(...active.map((l) => l.price_per_unit ?? l.price));
+}
+
+export async function getLowestListingPriceForItem(
+  archetype: string,
+  itemId: string,
+  itemMeta?: { name: string; rarity: string }
+): Promise<number | null> {
+  if (itemMeta?.name && itemMeta?.rarity) {
+    const targeted = await getMarketListings({
+      item: itemMeta.name,
+      rarity: itemMeta.rarity,
+      limit: 100,
+      order: 'asc',
+      has_sold: false,
+    });
+    const targetedActive = targeted.filter(
+      (listing) =>
+        !listing.has_sold &&
+        !listing.has_expired &&
+        listing.item_id === itemId
+    );
+    if (targetedActive.length > 0) {
+      return Math.min(
+        ...targetedActive.map((listing) => listing.price_per_unit ?? listing.price)
+      );
+    }
+  }
+
+  const listings = await getMarketListings({
+    archetype,
+    limit: 100,
+    order: 'asc',
+    has_sold: false,
+  });
+
+  const active = listings.filter(
+    (listing) =>
+      !listing.has_sold && !listing.has_expired && listing.item_id === itemId
+  );
+  if (active.length === 0) return null;
+
+  return Math.min(...active.map((listing) => listing.price_per_unit ?? listing.price));
 }
 
 export async function getFairPrice(archetype: string): Promise<number | null> {

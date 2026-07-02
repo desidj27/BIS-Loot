@@ -49,8 +49,8 @@ export default function MarketListingCard({ listing, attributeLabels }: MarketLi
         'shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_6px_18px_rgba(0,0,0,0.4)]'
       )}
     >
-      <div className="border-b border-[#2a241c] bg-[#171411]/90 px-4 pb-3 pt-4 text-center">
-        <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center border border-[#4a4338] bg-[#0a0908] p-1.5">
+      <div className="border-b border-[#2a241c] bg-[#171411]/90 px-3 pb-3 pt-3 text-center sm:px-4 sm:pb-3 sm:pt-4">
+        <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center border border-[#4a4338] bg-[#0a0908] p-1.5 sm:mb-3 sm:h-14 sm:w-14">
           <img
             src={listingIconUrl(listing.item_id)}
             alt={listing.item}
@@ -67,7 +67,7 @@ export default function MarketListingCard({ listing, attributeLabels }: MarketLi
         <Link
           href={`/item/${listing.item_id}`}
           className={cn(
-            'block truncate font-[Cinzel] text-base font-semibold tracking-wide no-underline hover:no-underline',
+            'block truncate font-[Cinzel] text-[15px] font-semibold tracking-wide no-underline hover:no-underline sm:text-base',
             itemCardRarityClass(listing.rarity)
           )}
         >
@@ -79,7 +79,7 @@ export default function MarketListingCard({ listing, attributeLabels }: MarketLi
       {(primaryStats.length > 0 || secondaryStats.length > 0) && (
         <div className="flex flex-col gap-1 px-3 py-3 text-center">
           {primaryStats.map((stat) => (
-            <p key={stat.key} className="text-[11px] leading-relaxed text-[#ddd6cb]">
+            <p key={stat.key} className="text-xs leading-relaxed text-[#ddd6cb] sm:text-[11px]">
               <span className="text-[#6b6258]">- </span>
               {formatPrimaryStatLine(stat)}
               <span className="text-[#6b6258]"> -</span>
@@ -94,7 +94,7 @@ export default function MarketListingCard({ listing, attributeLabels }: MarketLi
               <p
                 key={stat.key}
                 className={cn(
-                  'flex items-center justify-center gap-1.5 text-[11px] leading-relaxed',
+                  'flex items-center justify-center gap-1.5 text-xs leading-relaxed sm:text-[11px]',
                   gem ? 'text-[#7eb8e8]' : 'text-[#8ec4ef]/85'
                 )}
               >
@@ -114,19 +114,19 @@ export default function MarketListingCard({ listing, attributeLabels }: MarketLi
         </div>
       )}
 
-      <div className="border-t border-[#2a241c] px-4 py-3 text-center">
-        <p className="font-[Cinzel] text-lg font-semibold text-[#d4a054]">
+      <div className="border-t border-[#2a241c] px-3 py-3 text-center sm:px-4">
+        <p className="font-[Cinzel] text-xl font-semibold text-[#d4a054] sm:text-lg">
           {listing.price.toLocaleString()}G
         </p>
         {listing.quantity > 1 && (
-          <p className="mt-0.5 text-[10px] text-[#8a7f72]">
+          <p className="mt-0.5 text-xs text-[#8a7f72] sm:text-[10px]">
             {(listing.price_per_unit ?? listing.price).toLocaleString()}g each · qty {listing.quantity}
           </p>
         )}
-        <p className={cn('mt-1 text-[10px] uppercase tracking-wider', itemCardRarityClass(listing.rarity))}>
+        <p className={cn('mt-1 text-xs uppercase tracking-wider sm:text-[10px]', itemCardRarityClass(listing.rarity))}>
           {listing.rarity}
         </p>
-        <p className="mt-2 font-[Cinzel] text-[10px] italic text-[#b8944f]/80">
+        <p className="mt-2 font-[Cinzel] text-xs italic text-[#b8944f]/80 sm:text-[10px]">
           Expires {new Date(listing.expires_at).toLocaleDateString()}
         </p>
       </div>

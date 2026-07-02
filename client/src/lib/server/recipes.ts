@@ -42,6 +42,8 @@ const RARITY_NAMES: Record<number, string> = {
   3: 'Rare',
   4: 'Epic',
   5: 'Legendary',
+  6: 'Unique',
+  7: 'Artifact',
 };
 
 function parseIngredient(raw: string): ParsedIngredient {
@@ -97,28 +99,104 @@ export function getCraftMerchants(): string[] {
   return data.craft_order;
 }
 
+/** Craft output tier from merchant.json (e.g. ring tier 3 = Rare). */
 export function rarityNumberToName(rarity: number): string {
   return RARITY_NAMES[rarity] ?? 'Unknown';
+}
+
+/** Ingredient suffix in wiki format (e.g. Arcane Essence-4 = Rare essence). */
+export function ingredientRarityNumberToName(rarity: number): string {
+  if (rarity < 0) return 'Unknown';
+  return RARITY_NAMES[rarity - 1] ?? 'Unknown';
 }
 
 export function normalizeItemName(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]/g, '');
 }
 
-export function nameToArchetype(name: string, itemIndex: Map<string, string>): string | null {
-  const normalized = normalizeItemName(name);
-  return itemIndex.get(normalized) ?? null;
+function itemRarityKey(name: string, rarityName: string): string {
+  return `${normalizeItemName(name)}_${normalizeItemName(rarityName)}`;
+}
+
+export interface ResolvedIngredientItem {
+  id: string;
+  archetype: string;
+}
+
+export interface ItemIndex {
+  archetypeByName: Map<string, string>;
+  itemByNameAndRarity: Map<string, ResolvedIngredientItem>;
 }
 
 export function buildItemIndex(
-  items: Array<{ name: string; archetype: string }>
-): Map<string, string> {
-  const index = new Map<string, string>();
+  items: Array<{ id: string; name: string; archetype: string; rarity?: string }>
+): ItemIndex {
+  const archetypeByName = new Map<string, string>();
+  const itemByNameAndRarity = new Map<string, ResolvedIngredientItem>();
 
   for (const item of items) {
-    index.set(normalizeItemName(item.name), item.archetype);
-    index.set(normalizeItemName(item.archetype), item.archetype);
+    archetypeByName.set(normalizeItemName(item.name), item.archetype);
+    archetypeByName.set(normalizeItemName(item.archetype), item.archetype);
+    if (item.rarity) {
+      itemByNameAndRarity.set(itemRarityKey(item.name, item.rarity), {
+        id: item.id,
+        archetype: item.archetype,
+      });
+    }
   }
 
-  return index;
+  return { archetypeByName, itemByNameAndRarity };
+}
+
+export function nameToArchetype(name: string, itemIndex: ItemIndex | Map<string, string>): string | null {
+  const map = itemIndex instanceof Map ? itemIndex : itemIndex.archetypeByName;
+  const normalized = normalizeItemName(name);
+  return map.get(normalized) ?? null;
+}
+
+export function ingredientSuffixToItemId(archetype: string, suffix: number): string {
+  return `${archetype}_${suffix}001`;
+}
+
+export function isConcreteItemId(itemId: string): boolean {
+  return /_\d{4}$/.test(itemId);
+}
+
+export function resolveIngredientItem(
+  name: string,
+  ingredientRarity: number,
+  itemIndex: ItemIndex
+): ResolvedIngredientItem | null {
+  const archetype = itemIndex.archetypeByName.get(normalizeItemName(name));
+  if (!archetype) return null;
+
+  if (ingredientRarity >= 0) {
+    const rarityName = ingredientRarityNumberToName(ingredientRarity);
+    const keyed = itemIndex.itemByNameAndRarity.get(itemRarityKey(name, rarityName));
+    if (keyed) return keyed;
+
+    return {
+      id: ingredientSuffixToItemId(archetype, ingredientRarity),
+      archetype,
+    };
+  }
+
+  return null;
+}
+
+export function nameToArchetypeForIngredient(
+  name: string,
+  ingredientRarity: number,
+  itemIndex: ItemIndex | Map<string, string>
+): string | null {
+  if (itemIndex instanceof Map) {
+    if (ingredientRarity >= 0) {
+      const rarityName = ingredientRarityNumberToName(ingredientRarity);
+      const keyed = itemIndex.get(itemRarityKey(name, rarityName));
+      if (keyed) return keyed;
+    }
+    return nameToArchetype(name, itemIndex);
+  }
+
+  return resolveIngredientItem(name, ingredientRarity, itemIndex)?.archetype ?? null;
 }

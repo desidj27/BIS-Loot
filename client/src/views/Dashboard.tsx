@@ -13,7 +13,7 @@ import {
   gameMutedTextClass,
   gameTitleClass,
 } from '@/lib/gameTheme';
-import { fetchCraftCostForLookup } from '@/lib/craftCost';
+import { fetchCraftCostsForLookup } from '@/lib/craftCost';
 import {
   defaultMarketFilters,
   fetchMarketListings,
@@ -25,7 +25,7 @@ export default function Dashboard() {
   const [filters, setFilters] = useState<MarketFilterState>(defaultMarketFilters);
   const [listings, setListings] = useState<Awaited<ReturnType<typeof fetchMarketListings>>>([]);
   const [attributeLabels, setAttributeLabels] = useState<AttributeLabelMap>(new Map());
-  const [craftCost, setCraftCost] = useState<CraftCostResult | null>(null);
+  const [craftCosts, setCraftCosts] = useState<CraftCostResult[]>([]);
   const [craftLoading, setCraftLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -48,32 +48,30 @@ export default function Dashboard() {
         setListings([]);
       }
       setError(null);
-      const data = await fetchMarketListings(searchFilters);
+
+      const itemName = searchFilters.itemName.trim();
+      const listingsPromise = fetchMarketListings(searchFilters);
+      const craftPromise = itemName
+        ? fetchCraftCostsForLookup(itemName, searchFilters.rarity || undefined)
+        : Promise.resolve([] as CraftCostResult[]);
+
+      if (itemName) {
+        setCraftLoading(true);
+      } else {
+        setCraftCosts([]);
+        setCraftLoading(false);
+      }
+
+      const [data, costs] = await Promise.all([
+        listingsPromise,
+        craftPromise.catch(() => [] as CraftCostResult[]),
+      ]);
       if (generation !== searchGenerationRef.current) return;
 
       setListings(data);
       setHasSearched(true);
-
-      const itemName = searchFilters.itemName.trim();
-      if (itemName) {
-        setCraftLoading(true);
-        fetchCraftCostForLookup(itemName, searchFilters.rarity || undefined)
-          .then((cost) => {
-            if (generation !== searchGenerationRef.current) return;
-            setCraftCost(cost);
-          })
-          .catch(() => {
-            if (generation !== searchGenerationRef.current) return;
-            setCraftCost(null);
-          })
-          .finally(() => {
-            if (generation !== searchGenerationRef.current) return;
-            setCraftLoading(false);
-          });
-      } else {
-        setCraftCost(null);
-        setCraftLoading(false);
-      }
+      setCraftCosts(costs);
+      setCraftLoading(false);
     } catch (err) {
       if (generation !== searchGenerationRef.current) return;
       setError((err as Error).message);
@@ -100,12 +98,12 @@ export default function Dashboard() {
     runSearch(filters, true);
   }
 
-  const showCraftPanel = craftLoading || craftCost !== null;
+  const showCraftPanel = craftLoading || craftCosts.length > 0;
   const showSearchLoading = loading && !refreshing;
 
   return (
-    <div className="space-y-6">
-      <GamePanel className="p-6">
+    <div className="space-y-4 sm:space-y-6">
+      <GamePanel className="hidden p-4 sm:block sm:p-6">
         <h2 className={gameTitleClass}>Live Market Feed</h2>
         <p className={cn('mt-1', gameMutedTextClass)}>
           Browse and filter active marketplace listings from DarkerDB.
@@ -118,7 +116,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      <div className="grid items-start gap-6 lg:grid-cols-[280px_1fr]">
+      <div className="grid items-start gap-4 sm:gap-6 lg:grid-cols-[280px_1fr]">
         <MarketFilters
           filters={filters}
           onChange={setFilters}
@@ -126,13 +124,21 @@ export default function Dashboard() {
           loading={loading}
         />
 
-        <div className="min-w-0 space-y-6">
+        <div className="min-w-0 space-y-4 sm:space-y-6">
           {showCraftPanel && (
-            <CraftCostPanel craftCost={craftCost} loading={craftLoading} />
+            <div className="space-y-4">
+              {craftLoading && craftCosts.length === 0 ? (
+                <CraftCostPanel craftCost={null} loading={craftLoading} />
+              ) : (
+                craftCosts.map((cost) => (
+                  <CraftCostPanel key={cost.id} craftCost={cost} loading={craftLoading} />
+                ))
+              )}
+            </div>
           )}
 
           <GamePanel contentClassName="gap-0">
-            <div className="flex items-center justify-between px-4 py-3">
+            <div className="flex flex-col gap-2 px-3 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-4">
               <h3 className={gameHeadingClass}>
                 {hasSearched ? 'Search Results' : 'Recent Listings'}
               </h3>
@@ -141,11 +147,11 @@ export default function Dashboard() {
                   type="button"
                   onClick={handleRefresh}
                   disabled={refreshing || loading}
-                  className={cn(gameButtonClass, 'min-w-[5.5rem]')}
+                  className={cn(gameButtonClass, 'min-w-[5.5rem] flex-1 sm:flex-none')}
                 >
                   {refreshing ? 'Refreshing…' : 'Refresh'}
                 </button>
-                <span className="border border-[#4a4338] bg-[#0a0908] px-3 py-0.5 text-xs text-[#8a7f72]">
+                <span className="shrink-0 border border-[#4a4338] bg-[#0a0908] px-3 py-1 text-xs text-[#8a7f72] sm:py-0.5">
                   {listings.length} listings
                 </span>
               </div>
@@ -163,12 +169,12 @@ export default function Dashboard() {
             ) : (
               <div
                 className={cn(
-                  'columns-1 gap-4 p-4 sm:columns-2 lg:columns-5',
+                  'columns-1 gap-3 p-3 sm:columns-2 sm:gap-4 sm:p-4 lg:columns-5',
                   refreshing && 'opacity-60'
                 )}
               >
                 {listings.map((listing) => (
-                  <div key={listing.id} className="mb-4 break-inside-avoid">
+                  <div key={listing.id} className="mb-3 break-inside-avoid sm:mb-4">
                     <MarketListingCard
                       listing={listing}
                       attributeLabels={attributeLabels}

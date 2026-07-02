@@ -90,6 +90,25 @@ export function rankItemSuggestions(suggestions: ItemSuggestion[], query: string
   });
 }
 
+export async function getAvailableRaritiesForItem(itemName: string): Promise<string[]> {
+  const trimmed = itemName.trim();
+  if (!trimmed) return [...RARITIES];
+
+  const items = await api.searchItems(trimmed);
+  const normalizedName = trimmed.toLowerCase();
+  const rarities = new Set<string>();
+
+  for (const item of items) {
+    if (item.name.toLowerCase() === normalizedName) {
+      rarities.add(item.rarity);
+    }
+  }
+
+  if (rarities.size === 0) return [...RARITIES];
+
+  return RARITIES.filter((rarity) => rarities.has(rarity));
+}
+
 export async function searchItemSuggestions(query: string): Promise<ItemSuggestion[]> {
   const trimmed = query.trim();
   if (trimmed.length < 2) return [];

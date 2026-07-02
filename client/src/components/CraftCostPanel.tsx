@@ -56,5 +56,5 @@ export default function CraftCostPanel({
     return <div className={className}>{content}</div>;
   }
 
-  return <GamePanel className={cn('p-6', className)}>{content}</GamePanel>;
+  return <GamePanel className={cn('p-4 sm:p-6', className)}>{content}</GamePanel>;
 }

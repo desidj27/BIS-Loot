@@ -18,6 +18,7 @@ import {
   attributeInputStep,
   clampAttributeValue,
   GemStatus,
+  getAvailableRaritiesForItem,
   ItemSuggestion,
   loadItemAttributeRanges,
   mergePendingAttributeFilter,
@@ -86,6 +87,7 @@ export default function MarketFilters({
   const [suggestLoading, setSuggestLoading] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
   const [quickItems, setQuickItems] = useState<string[]>([]);
+  const [availableRarities, setAvailableRarities] = useState<string[]>([...RARITIES]);
   const blurTimer = useRef<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const filtersRef = useRef(filters);
@@ -95,6 +97,38 @@ export default function MarketFilters({
   useEffect(() => {
     setQuickItems(readSearchHistory());
   }, []);
+
+  useEffect(() => {
+    const itemName = filters.itemName.trim();
+    if (!itemName) {
+      setAvailableRarities([...RARITIES]);
+      return;
+    }
+
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      getAvailableRaritiesForItem(itemName)
+        .then((rarities) => {
+          if (cancelled) return;
+          setAvailableRarities(rarities);
+
+          const current = filtersRef.current;
+          if (current.rarity && !rarities.includes(current.rarity)) {
+            const next = { ...current, rarity: '' };
+            filtersRef.current = next;
+            onChange(next);
+          }
+        })
+        .catch(() => {
+          if (!cancelled) setAvailableRarities([...RARITIES]);
+        });
+    }, 200);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [filters.itemName, onChange]);
 
   function refreshQuickItems() {
     setQuickItems(readSearchHistory());
@@ -349,7 +383,7 @@ export default function MarketFilters({
         : null;
 
   return (
-    <GamePanel className="sticky top-20 p-4">
+    <GamePanel className="p-3 sm:sticky sm:top-[4.5rem] sm:p-4 lg:top-20">
       <h3 className={gameHeadingClass}>Market Filters</h3>
       <GameDivider className="px-0" />
 
@@ -439,7 +473,7 @@ export default function MarketFilters({
                 type="button"
                 title={name}
                 className={cn(
-                  'max-w-full truncate border border-[#3a342c] bg-[#0a0908] px-2 py-1 text-[11px] text-[#c9bfb0] transition-colors',
+                  'max-w-full truncate border border-[#3a342c] bg-[#0a0908] px-2.5 py-1.5 text-xs text-[#c9bfb0] transition-colors sm:px-2 sm:py-1 sm:text-[11px]',
                   'hover:border-[#8a7355] hover:text-[#f0e6d8]',
                   filters.itemName.trim().toLowerCase() === name.toLowerCase() &&
                     'border-[#8a7355] text-[#e5b56e]'
@@ -461,7 +495,7 @@ export default function MarketFilters({
           onChange={(e) => update({ rarity: e.target.value })}
         >
           <option value="">Any Rarity</option>
-          {RARITIES.map((r) => (
+          {availableRarities.map((r) => (
             <option key={r} value={r} className={itemCardRarityClass(r)}>
               {r}
             </option>
@@ -483,7 +517,7 @@ export default function MarketFilters({
               key={value}
               type="button"
               className={cn(
-                'py-1.5 text-xs font-medium transition-colors',
+                'min-h-10 py-2.5 text-xs font-medium transition-colors sm:min-h-0 sm:py-1.5',
                 filters.gems === value
                   ? 'border border-[#8a7355] bg-[#241c14] text-[#e5b56e]'
                   : 'border border-transparent text-[#8a7f72] hover:text-[#ddd6cb]'

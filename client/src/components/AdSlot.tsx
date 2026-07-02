@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { cn } from '@/lib/utils';
-import { adsConfig, isAdConfigured, loadAdSenseScript, type AdPlacement } from '@/lib/ads';
+import { adsConfig, isAdClientConfigured, isAdConfigured, loadAdSenseScript, type AdPlacement } from '@/lib/ads';
 
 interface AdSlotProps {
   placement: AdPlacement;
@@ -47,8 +47,27 @@ export default function AdSlot({
     };
   }, [configured, placement, slotId]);
 
-  if (!configured) {
+  if (!isAdClientConfigured()) {
     return null;
+  }
+
+  if (!configured) {
+    return (
+      <aside
+        className={cn(
+          'flex min-h-[90px] flex-col items-center justify-center border border-dashed border-[#4a4338] bg-[#0a0908]/80 px-3 py-4 text-center',
+          className
+        )}
+        aria-label="Advertisement placeholder"
+      >
+        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#6b6258]">
+          Advertisement
+        </p>
+        <p className="mt-1 text-[11px] text-[#8a7f72]">
+          Add <code className="text-[#c9bfb0]">NEXT_PUBLIC_AD_SLOT_{placement === 'footer' ? 'FOOTER' : 'MARKET_SIDEBAR'}</code> after AdSense approval.
+        </p>
+      </aside>
+    );
   }
 
   return (

@@ -38,13 +38,18 @@ export default function CraftBreakdown({
           <li
             key={`${ingredient.name}-${ingredient.rarity}`}
             className={cn(
-              'flex items-start justify-between gap-2',
-              compact ? 'text-[10px]' : 'text-xs'
+              'flex flex-col items-start justify-between gap-1 sm:flex-row sm:items-start sm:gap-2',
+              compact ? 'text-xs sm:text-[10px]' : 'text-sm sm:text-xs'
             )}
           >
             <span className="min-w-0 text-[#8a7f72]">
               {ingredient.amount}×{' '}
-              <span className="text-[#ddd6cb]">{ingredient.name}</span>
+              <span className="text-[#ddd6cb]">
+                {ingredient.name}
+                {ingredient.rarityName && ingredient.rarityName !== 'Unknown'
+                  ? ` (${ingredient.rarityName})`
+                  : ''}
+              </span>
               {!compact && ingredient.unitPrice !== null && (
                 <span className="text-[#6b6258]"> @ {formatGold(ingredient.unitPrice)} ea</span>
               )}

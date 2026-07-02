@@ -1,5 +1,7 @@
+const DEFAULT_ADSENSE_CLIENT = 'ca-pub-6977571958869287';
+
 export const adsConfig = {
-  clientId: process.env.NEXT_PUBLIC_ADSENSE_CLIENT,
+  clientId: process.env.NEXT_PUBLIC_ADSENSE_CLIENT || DEFAULT_ADSENSE_CLIENT,
   slots: {
     footer: process.env.NEXT_PUBLIC_AD_SLOT_FOOTER,
     marketSidebar: process.env.NEXT_PUBLIC_AD_SLOT_MARKET_SIDEBAR,
@@ -7,6 +9,10 @@ export const adsConfig = {
 } as const;
 
 export type AdPlacement = keyof typeof adsConfig.slots;
+
+export function isAdClientConfigured(): boolean {
+  return Boolean(adsConfig.clientId);
+}
 
 export function isAdConfigured(placement: AdPlacement): boolean {
   return Boolean(adsConfig.clientId && adsConfig.slots[placement]);

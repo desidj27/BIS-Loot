@@ -8,6 +8,8 @@
 @layer base {
   html {
     scrollbar-gutter: stable;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
   }
 
   * {
@@ -15,7 +17,7 @@
   }
 
   body {
-    @apply bg-[#080706] text-[#ddd6cb] antialiased;
+    @apply overflow-x-hidden bg-[#080706] text-[#ddd6cb] antialiased;
   }
 
   a {

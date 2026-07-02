@@ -192,6 +192,8 @@ export const api = {
     const query = params.toString();
     return fetchJson<CraftableGear>(query ? `/items/craftable?${query}` : '/items/craftable');
   },
+  craftingForItemName: (itemName: string) =>
+    fetchJson<CraftCostResult[]>(`/crafting/${encodeURIComponent(itemName)}`),
   craftingMerchants: () => fetchJson<string[]>('/crafting/merchants'),
   crafting: (merchant?: string) =>
     fetchJson<CraftCostResult[]>(

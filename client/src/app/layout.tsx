@@ -1,9 +1,10 @@
 import type { Metadata } from 'next';
+import Script from 'next/script';
 import { Cinzel, Inter } from 'next/font/google';
 import { GridBackground } from '@/components/ui/grid-background';
 import { GameDivider } from '@/components/ui/game-panel';
 import AdSlot from '@/components/AdSlot';
-import { isAdClientConfigured } from '@/lib/ads';
+import { adsConfig, isAdClientConfigured } from '@/lib/ads';
 import BisLootLogo from '@/components/BisLootLogo';
 import SiteNav from '@/components/SiteNav';
 import './globals.css';
@@ -35,6 +36,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className={`dark ${inter.variable} ${cinzel.variable}`}>
       <head>
         <meta name="google-adsense-account" content="ca-pub-6977571958869287" />
+        {adsConfig.clientId ? (
+          <Script
+            id="adsense-init"
+            async
+            src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${adsConfig.clientId}`}
+            crossOrigin="anonymous"
+            strategy="beforeInteractive"
+          />
+        ) : null}
       </head>
       <body className="font-sans">
         <GridBackground className="flex min-h-screen flex-col">

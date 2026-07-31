@@ -24,7 +24,10 @@ export function loadAdSenseScript(clientId: string): Promise<void> {
   if (adsenseScriptPromise) return adsenseScriptPromise;
 
   adsenseScriptPromise = new Promise((resolve, reject) => {
-    if (document.querySelector('script[data-adsense="true"]')) {
+    if (
+      document.querySelector('script[data-adsense="true"]') ||
+      document.querySelector('script[src*="adsbygoogle.js"]')
+    ) {
       resolve();
       return;
     }

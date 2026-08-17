@@ -21,6 +21,11 @@ export const gameTitleClass =
 
 export const gameMutedTextClass = 'text-sm text-[#8a7f72]';
 
+function rarityLookupKey(rarity: string): string {
+  if (!rarity) return '';
+  return rarity.charAt(0).toUpperCase() + rarity.slice(1).toLowerCase();
+}
+
 export function itemCardRarityClass(rarity: string): string {
   const map: Record<string, string> = {
     Poor: 'text-[#9d9d9d]',
@@ -32,7 +37,7 @@ export function itemCardRarityClass(rarity: string): string {
     Unique: 'text-[#ECD99A] font-semibold',
     Artifact: 'text-[#E60505] font-semibold',
   };
-  return map[rarity] ?? 'text-[#c9bfb0]';
+  return map[rarity] ?? map[rarityLookupKey(rarity)] ?? 'text-[#c9bfb0]';
 }
 
 export function itemCardRarityBarClass(rarity: string): string {
@@ -46,5 +51,5 @@ export function itemCardRarityBarClass(rarity: string): string {
     Unique: 'bg-[#ECD99A]',
     Artifact: 'bg-[#E60505]',
   };
-  return map[rarity] ?? 'bg-[#5c534a]';
+  return map[rarity] ?? map[rarityLookupKey(rarity)] ?? 'bg-[#5c534a]';
 }

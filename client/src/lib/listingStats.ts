@@ -134,7 +134,7 @@ export function extractListingGems(
 }
 
 export function listingIconUrl(itemId: string): string {
-  return `https://api.darkerdb.com/v1/items/${encodeURIComponent(itemId)}/icon`;
+  return `https://api.darkerdb.com/v2/items/${encodeURIComponent(itemId)}/icon`;
 }
 
 export function gemIconUrl(gemId: string): string {

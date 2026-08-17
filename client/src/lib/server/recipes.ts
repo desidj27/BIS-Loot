@@ -158,8 +158,21 @@ export function ingredientSuffixToItemId(archetype: string, suffix: number): str
   return `${archetype}_${suffix}001`;
 }
 
+/** Strip v2 envelope prefix and compare ids across formats (ArcaneEssence_6001 vs id.item.arcane_essence_6001). */
+export function canonicalItemIdKey(itemId: string): string {
+  return itemId
+    .replace(/^id\.item\./i, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+}
+
+export function itemIdsEqual(a: string, b: string): boolean {
+  return canonicalItemIdKey(a) === canonicalItemIdKey(b);
+}
+
 export function isConcreteItemId(itemId: string): boolean {
-  return /_\d{4}$/.test(itemId);
+  const raw = itemId.replace(/^id\.item\./i, '');
+  return /_\d{4}$/.test(raw);
 }
 
 export function resolveIngredientItem(

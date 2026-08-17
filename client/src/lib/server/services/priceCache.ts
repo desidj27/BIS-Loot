@@ -5,7 +5,7 @@ import {
   getLowestListingPriceForItem,
   getMarketListings,
 } from '../darkerdb';
-import { isConcreteItemId } from '../recipes';
+import { isConcreteItemId, itemIdsEqual } from '../recipes';
 
 const PRICE_CACHE_TTL_MS = 10 * 60 * 1000;
 const priceCache = new Map<string, { price: number | null; expiresAt: number }>();
@@ -138,7 +138,7 @@ function lowestUnitPrice(
 ): number | null {
   const active = listings.filter(
     (listing) =>
-      !listing.has_sold && !listing.has_expired && listing.item_id === itemId
+      !listing.has_sold && !listing.has_expired && itemIdsEqual(listing.item_id, itemId)
   );
   if (active.length === 0) return null;
   return Math.min(...active.map((listing) => listing.price_per_unit ?? listing.price));
@@ -246,7 +246,8 @@ async function averageListingPriceForItem(
   listings: Awaited<ReturnType<typeof getMarketListings>>
 ): Promise<number | null> {
   const active = listings.filter(
-    (listing) => !listing.has_sold && !listing.has_expired && listing.item_id === itemId
+    (listing) =>
+      !listing.has_sold && !listing.has_expired && itemIdsEqual(listing.item_id, itemId)
   );
   if (active.length === 0) return null;
 

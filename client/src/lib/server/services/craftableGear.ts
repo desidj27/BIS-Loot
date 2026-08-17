@@ -26,7 +26,7 @@ export interface CraftableGearItem {
   ingredients: IngredientCost[] | null;
 }
 
-const DARKERDB_ICON_BASE = 'https://api.darkerdb.com/v1/items';
+const DARKERDB_ICON_BASE = 'https://api.darkerdb.com/v2/items';
 
 function findItemForRecipe(recipe: CraftRecipe, items: GameItem[]): GameItem | null {
   const rarityName = rarityNumberToName(recipe.outputRarity);

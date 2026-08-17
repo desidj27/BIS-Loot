@@ -245,5 +245,6 @@ export function rarityClass(rarity: string): string {
     Unique: 'text-[#ECD99A] font-semibold',
     Artifact: 'text-[#E60505] font-semibold',
   };
-  return map[rarity] ?? 'text-[#c9bfb0]';
+  const key = rarity ? rarity.charAt(0).toUpperCase() + rarity.slice(1).toLowerCase() : '';
+  return map[rarity] ?? map[key] ?? 'text-[#c9bfb0]';
 }

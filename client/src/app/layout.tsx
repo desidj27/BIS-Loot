@@ -4,7 +4,7 @@ import { Cinzel, Inter } from 'next/font/google';
 import { GridBackground } from '@/components/ui/grid-background';
 import { GameDivider } from '@/components/ui/game-panel';
 import AdSlot from '@/components/AdSlot';
-import { adsConfig, isAdClientConfigured } from '@/lib/ads';
+import { adsConfig, isAdConfigured } from '@/lib/ads';
 import BisLootLogo from '@/components/BisLootLogo';
 import SiteNav from '@/components/SiteNav';
 import './globals.css';
@@ -72,7 +72,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           </main>
 
           <footer className="border-t border-[#4a4338]">
-            {isAdClientConfigured() ? (
+            {isAdConfigured('footer') ? (
               <div className="px-3 py-4 sm:px-6 md:px-12 lg:px-16 xl:px-24">
                 <AdSlot placement="footer" format="horizontal" className="mx-auto max-w-4xl" />
               </div>

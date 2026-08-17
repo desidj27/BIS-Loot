@@ -47,9 +47,14 @@ All API routes live under `/api/*` as Next.js Route Handlers:
 
 ## Environment Variables
 
-Optional AdSense (copy `client/.env.example` to `client/.env.local`):
+Copy `client/.env.example` to `client/.env.local`:
 
 ```
+# Required — DarkerDB v2 API key (https://darkerdb.com/dashboard/api-keys)
+# Scopes needed: darkerdb.data + darkerdb.live
+DARKERDB_API_KEY=
+
+# Optional AdSense
 NEXT_PUBLIC_ADSENSE_CLIENT=
 NEXT_PUBLIC_AD_SLOT_FOOTER=
 NEXT_PUBLIC_AD_SLOT_MARKET_SIDEBAR=

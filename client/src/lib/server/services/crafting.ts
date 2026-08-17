@@ -111,6 +111,27 @@ function ingredientItems(recipes: CraftRecipe[], itemIndex: ItemIndex): PriceIte
   return items;
 }
 
+function resolveOutputCatalogItem(
+  recipe: CraftRecipe,
+  itemName: string,
+  catalog: Array<{ id: string; name: string; rarity: string; archetype: string }>
+): { id: string; name: string; rarity: string; archetype: string } | null {
+  const byName = catalog.filter(
+    (entry) => entry.name.toLowerCase() === itemName.toLowerCase()
+  );
+  if (byName.length === 0) return null;
+
+  const rarityName = rarityNumberToName(recipe.outputRarity);
+  const exact = byName.find((entry) => entry.rarity === rarityName);
+  if (exact) return exact;
+
+  // Set crafts (Obsidian, etc.) often use a merchant rarity key that does not
+  // match the catalog rarity. If only one variant exists, that is the output.
+  if (byName.length === 1) return byName[0];
+
+  return null;
+}
+
 function outputPriceItems(
   recipes: CraftRecipe[],
   itemName: string,
@@ -118,11 +139,7 @@ function outputPriceItems(
 ): Array<PriceItemRef & { recipeId: string }> {
   return recipes
     .map((recipe) => {
-      const rarityName = rarityNumberToName(recipe.outputRarity);
-      const item = catalog.find(
-        (entry) =>
-          entry.name.toLowerCase() === itemName.toLowerCase() && entry.rarity === rarityName
-      );
+      const item = resolveOutputCatalogItem(recipe, itemName, catalog);
       if (!item) return null;
 
       return {
@@ -279,6 +296,10 @@ function findRecipeForItem(item: { name: string; rarity: string; archetype: stri
   );
   if (exact) return exact;
 
+  // Single-recipe outputs (e.g. Obsidian gear) may use a merchant rarity key
+  // that does not match the catalog rarity label.
+  if (recipes.length === 1) return recipes[0];
+
   return null;
 }
 
@@ -302,27 +323,49 @@ export async function getCraftingCostForItem(itemName: string): Promise<CraftCos
     }
   );
 
-  return recipes
-    .map((recipe) => {
-      const ingredients = buildIngredientCosts(recipe, itemIndex, prices);
-      const rarityName = rarityNumberToName(recipe.outputRarity);
-      const outputItem = outputItems.find((entry) => entry.recipeId === recipe.id);
+  const byOutputId = new Map<string, CraftCostResult>();
 
-      return {
-        id: recipe.id,
-        outputName: recipe.outputName,
-        outputRarity: recipe.outputRarity,
-        outputRarityName: rarityName,
-        merchant: recipe.merchant,
-        quantity: recipe.quantity,
-        ingredients,
-        craftCost: craftCostFromIngredients(ingredients),
-        marketPrice: outputItem ? (prices.get(outputItem.id) ?? null) : null,
-        profitGold: null,
-        profitPercent: null,
-      };
-    })
-    .sort((a, b) => a.outputRarity - b.outputRarity);
+  for (const recipe of recipes) {
+    const outputItem = outputItems.find((entry) => entry.recipeId === recipe.id);
+    if (!outputItem) continue;
+
+    const ingredients = buildIngredientCosts(recipe, itemIndex, prices);
+    const rarityName = outputItem.rarity;
+    const craftCost = craftCostFromIngredients(ingredients);
+    const marketPrice = prices.get(outputItem.id) ?? null;
+    let profitGold: number | null = null;
+    let profitPercent: number | null = null;
+
+    if (craftCost !== null && marketPrice !== null && craftCost > 0) {
+      profitGold = marketPrice - craftCost;
+      profitPercent = Math.round((profitGold / craftCost) * 1000) / 10;
+    }
+
+    const result: CraftCostResult = {
+      id: recipe.id,
+      outputName: recipe.outputName,
+      outputRarity: recipe.outputRarity,
+      outputRarityName: rarityName,
+      merchant: recipe.merchant,
+      quantity: recipe.quantity,
+      ingredients,
+      craftCost,
+      marketPrice,
+      profitGold,
+      profitPercent,
+    };
+
+    const existing = byOutputId.get(outputItem.id);
+    const existingMatches = existing
+      ? rarityNumberToName(existing.outputRarity) === existing.outputRarityName
+      : false;
+    const thisMatches = rarityNumberToName(recipe.outputRarity) === rarityName;
+    if (!existing || (thisMatches && !existingMatches)) {
+      byOutputId.set(outputItem.id, result);
+    }
+  }
+
+  return [...byOutputId.values()].sort((a, b) => a.outputRarity - b.outputRarity);
 }
 
 export async function getCraftingCostForItemId(itemId: string): Promise<CraftCostResult | null> {

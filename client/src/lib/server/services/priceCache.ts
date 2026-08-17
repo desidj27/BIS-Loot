@@ -1,4 +1,5 @@
 import {
+  averageCheapestUnitPrice,
   getAllItemsPaginated,
   getFairPrice,
   getLowestListingPrice,
@@ -100,7 +101,7 @@ export async function getCachedItemPrice(
     return fixedPrice;
   }
 
-  const cacheKey = `item:${itemId}`;
+  const cacheKey = `item-v2:${itemId}`;
   const cached = priceCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) {
     return cached.price;
@@ -132,7 +133,7 @@ export interface PriceItemRef {
   rarity: string;
 }
 
-function lowestUnitPrice(
+function cheapestAverageUnitPrice(
   listings: Awaited<ReturnType<typeof getMarketListings>>,
   itemId: string
 ): number | null {
@@ -140,8 +141,7 @@ function lowestUnitPrice(
     (listing) =>
       !listing.has_sold && !listing.has_expired && itemIdsEqual(listing.item_id, itemId)
   );
-  if (active.length === 0) return null;
-  return Math.min(...active.map((listing) => listing.price_per_unit ?? listing.price));
+  return averageCheapestUnitPrice(active);
 }
 
 export async function resolvePricesForItems(
@@ -170,7 +170,7 @@ export async function resolvePricesForItems(
     [...byMarketQuery.entries()].map(async ([queryKey, itemIds]) => {
       const [name, rarity] = queryKey.split('\0');
       const uncachedIds = itemIds.filter((itemId) => {
-        const cacheKey = `item:${itemId}`;
+        const cacheKey = `item-v2:${itemId}`;
         const cached = priceCache.get(cacheKey);
         if (cached && cached.expiresAt > Date.now()) {
           prices.set(itemId, cached.price);
@@ -191,7 +191,7 @@ export async function resolvePricesForItems(
 
       for (const itemId of uncachedIds) {
         const itemRef = unique.get(itemId);
-        let price = lowestUnitPrice(listings, itemId);
+        let price = cheapestAverageUnitPrice(listings, itemId);
 
         if (price === null) {
           price = options.vendorPricesByItemId?.get(itemId) ?? null;
@@ -207,7 +207,7 @@ export async function resolvePricesForItems(
           price = await getFairPrice(itemRef.archetype);
         }
 
-        const cacheKey = `item:${itemId}`;
+        const cacheKey = `item-v2:${itemId}`;
         priceCache.set(cacheKey, { price, expiresAt: Date.now() + PRICE_CACHE_TTL_MS });
         prices.set(itemId, price);
       }

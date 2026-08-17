@@ -33,6 +33,7 @@ export interface MarketListing {
   price_per_unit: number;
   quantity: number;
   created_at: string;
+  last_seen_at?: string | null;
   expires_at: string;
   has_sold: boolean;
   has_expired: boolean;
@@ -134,6 +135,78 @@ function isListingActive(listing: MarketListing): boolean {
   return !listing.has_sold && !listing.has_expired;
 }
 
+const CHEAPEST_SAMPLE_SIZE = 10;
+const STALE_LISTING_MAX_AGE_MS = 6 * 60 * 60 * 1000;
+const OUTLIER_LOW_RATIO = 0.5;
+const MIN_FILTERED_LISTINGS = 3;
+
+function listingUnitPrice(listing: MarketListing): number | null {
+  const price = listing.price_per_unit ?? listing.price;
+  if (typeof price !== 'number' || !Number.isFinite(price) || price <= 0) return null;
+  return price;
+}
+
+function listingSeenAtMs(listing: MarketListing): number | null {
+  const raw =
+    (typeof listing.last_seen_at === 'string' && listing.last_seen_at) ||
+    (typeof listing.created_at === 'string' && listing.created_at) ||
+    '';
+  if (!raw) return null;
+  const ms = Date.parse(raw);
+  return Number.isFinite(ms) ? ms : null;
+}
+
+function median(values: number[]): number {
+  const sorted = [...values].sort((a, b) => a - b);
+  return sorted[Math.floor((sorted.length - 1) / 2)] ?? 0;
+}
+
+/** Drop listings not seen with the latest market wave (ghost sold/expired rows). */
+function rejectStaleListings(listings: MarketListing[]): MarketListing[] {
+  const seenTimes = listings
+    .map(listingSeenAtMs)
+    .filter((ms): ms is number => ms !== null);
+  if (seenTimes.length === 0) return listings;
+
+  const newest = Math.max(...seenTimes);
+  const fresh = listings.filter((listing) => {
+    const seen = listingSeenAtMs(listing);
+    return seen !== null && seen >= newest - STALE_LISTING_MAX_AGE_MS;
+  });
+  return fresh.length >= MIN_FILTERED_LISTINGS ? fresh : listings;
+}
+
+/** Drop bait/typo undercuts that sit far below the market median. */
+function rejectPriceOutliers(listings: MarketListing[]): MarketListing[] {
+  const prices = listings
+    .map(listingUnitPrice)
+    .filter((price): price is number => price !== null);
+  if (prices.length < MIN_FILTERED_LISTINGS) return listings;
+
+  const floor = median(prices) * OUTLIER_LOW_RATIO;
+  const filtered = listings.filter((listing) => {
+    const price = listingUnitPrice(listing);
+    return price !== null && price >= floor;
+  });
+  return filtered.length >= MIN_FILTERED_LISTINGS ? filtered : listings;
+}
+
+export function averageCheapestUnitPrice(
+  listings: MarketListing[],
+  sampleSize = CHEAPEST_SAMPLE_SIZE
+): number | null {
+  const usable = rejectPriceOutliers(rejectStaleListings(listings));
+  const prices = usable
+    .map(listingUnitPrice)
+    .filter((price): price is number => price !== null)
+    .sort((a, b) => a - b)
+    .slice(0, sampleSize);
+
+  if (prices.length === 0) return null;
+  const average = prices.reduce((sum, price) => sum + price, 0) / prices.length;
+  return Math.round(average * 100) / 100;
+}
+
 function isListingSold(listing: MarketListing): boolean {
   if (listing.listing_state) {
     return listing.listing_state === 'sold' || listing.listing_state === 'missing';
@@ -147,24 +220,43 @@ function flattenListingAttributes(listing: MarketListing): Record<string, unknow
   return { ...(attrs as Record<string, unknown>) };
 }
 
-function socketsFromListing(listing: MarketListing): Partial<MarketListing> {
-  const sockets = listing.sockets;
-  if (!Array.isArray(sockets)) {
-    return {
-      socket_1: listing.socket_1 ?? null,
-      socket_2: listing.socket_2 ?? null,
-      socket_3: listing.socket_3 ?? null,
-      socket_4: listing.socket_4 ?? null,
-      socket_5: listing.socket_5 ?? null,
-    };
+function socketId(value: unknown): string | null {
+  if (typeof value === 'string' && value.trim()) return value.trim();
+  if (value && typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    for (const key of ['id', 'item_id', 'gem_id', 'gem']) {
+      const nested = record[key];
+      if (typeof nested === 'string' && nested.trim()) return nested.trim();
+    }
+  }
+  return null;
+}
+
+export function listingSocketIds(listing: MarketListing): string[] {
+  const ids: string[] = [];
+  if (Array.isArray(listing.sockets)) {
+    for (const socket of listing.sockets) {
+      const id = socketId(socket);
+      if (id) ids.push(id);
+    }
   }
 
+  for (let i = 1; i <= 5; i++) {
+    const id = socketId(listing[`socket_${i}`]);
+    if (id) ids.push(id);
+  }
+
+  return [...new Set(ids)];
+}
+
+function socketsFromListing(listing: MarketListing): Partial<MarketListing> {
+  const ids = listingSocketIds(listing);
   return {
-    socket_1: (sockets[0] as string | null | undefined) ?? null,
-    socket_2: (sockets[1] as string | null | undefined) ?? null,
-    socket_3: (sockets[2] as string | null | undefined) ?? null,
-    socket_4: (sockets[3] as string | null | undefined) ?? null,
-    socket_5: (sockets[4] as string | null | undefined) ?? null,
+    socket_1: ids[0] ?? null,
+    socket_2: ids[1] ?? null,
+    socket_3: ids[2] ?? null,
+    socket_4: ids[3] ?? null,
+    socket_5: ids[4] ?? null,
   };
 }
 
@@ -396,11 +488,14 @@ export async function getItemAttributes(): Promise<ItemAttribute[]> {
 
     const values = data.body?.values ?? data.body?.facet?.values ?? [];
     if (Array.isArray(values) && values.length > 0) {
-      return values.map((entry) => ({
-        id: entry.value,
-        field: entry.value,
-        display: entry.label || entry.value,
-      }));
+      return values.map((entry) => {
+        const field = entry.value.replace(/^id\.attribute\./i, '');
+        return {
+          id: entry.value,
+          field,
+          display: entry.label || field,
+        };
+      });
     }
   } catch {
     // Fall through to legacy path if facets shape differs.
@@ -442,7 +537,7 @@ export async function searchMarketListings(options: MarketSearchOptions = {}): P
 
   const params: QueryParams = {
     limit,
-    order: 'desc',
+    order: 'asc',
     has_sold: false,
   };
 
@@ -452,7 +547,16 @@ export async function searchMarketListings(options: MarketSearchOptions = {}): P
   if (gems === 'no_gems') params.has_gems = false;
 
   const listings = await getMarketListings(params);
-  return listings.filter((l) => isListingActive(l));
+  const active = listings.filter((l) => isListingActive(l));
+
+  if (gems === 'gemmed') {
+    return active.filter((listing) => listingSocketIds(listing).length > 0);
+  }
+  if (gems === 'no_gems') {
+    return active.filter((listing) => listingSocketIds(listing).length === 0);
+  }
+
+  return active;
 }
 
 export async function searchItems(name: string): Promise<GameItem[]> {
@@ -519,15 +623,12 @@ async function loadAllItemsPaginated(): Promise<GameItem[]> {
 export async function getLowestListingPrice(archetype: string): Promise<number | null> {
   const listings = await getMarketListings({
     archetype,
-    limit: 20,
+    limit: 100,
     order: 'asc',
     has_sold: false,
   });
 
-  const active = listings.filter((l) => isListingActive(l));
-  if (active.length === 0) return null;
-
-  return Math.min(...active.map((l) => l.price_per_unit ?? l.price));
+  return averageCheapestUnitPrice(listings.filter((l) => isListingActive(l)));
 }
 
 export async function getLowestListingPriceForItem(
@@ -546,11 +647,8 @@ export async function getLowestListingPriceForItem(
     const targetedActive = targeted.filter(
       (listing) => isListingActive(listing) && itemIdsEqual(listing.item_id, itemId)
     );
-    if (targetedActive.length > 0) {
-      return Math.min(
-        ...targetedActive.map((listing) => listing.price_per_unit ?? listing.price)
-      );
-    }
+    const targetedPrice = averageCheapestUnitPrice(targetedActive);
+    if (targetedPrice !== null) return targetedPrice;
   }
 
   const listings = await getMarketListings({
@@ -563,9 +661,7 @@ export async function getLowestListingPriceForItem(
   const active = listings.filter(
     (listing) => isListingActive(listing) && itemIdsEqual(listing.item_id, itemId)
   );
-  if (active.length === 0) return null;
-
-  return Math.min(...active.map((listing) => listing.price_per_unit ?? listing.price));
+  return averageCheapestUnitPrice(active);
 }
 
 export async function getFairPrice(archetype: string): Promise<number | null> {

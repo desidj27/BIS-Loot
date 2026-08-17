@@ -169,12 +169,12 @@ export default function Dashboard() {
             ) : (
               <div
                 className={cn(
-                  'columns-1 gap-3 p-3 sm:columns-2 sm:gap-4 sm:p-4 lg:columns-5',
+                  'grid grid-cols-1 gap-3 p-3 sm:grid-cols-2 sm:gap-4 sm:p-4 lg:grid-cols-5',
                   refreshing && 'opacity-60'
                 )}
               >
                 {listings.map((listing) => (
-                  <div key={listing.id} className="mb-3 break-inside-avoid sm:mb-4">
+                  <div key={listing.id}>
                     <MarketListingCard
                       listing={listing}
                       attributeLabels={attributeLabels}

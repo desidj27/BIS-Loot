@@ -20,11 +20,18 @@ export function extractRollProfile(listing: MarketListing): RollProfile {
   }
 
   const gems: string[] = [];
-  for (let socket = 1; socket <= 5; socket++) {
-    const raw = listing[`socket_${socket}` as keyof MarketListing];
-    if (typeof raw === 'string' && raw) {
-      gems.push(gemBaseName(raw));
-    }
+  const socketValues = Array.isArray(listing.sockets)
+    ? listing.sockets
+    : [listing.socket_1, listing.socket_2, listing.socket_3, listing.socket_4, listing.socket_5];
+
+  for (const rawValue of socketValues) {
+    const raw =
+      typeof rawValue === 'string'
+        ? rawValue
+        : rawValue && typeof rawValue === 'object' && 'id' in rawValue
+          ? String((rawValue as { id?: unknown }).id ?? '')
+          : '';
+    if (raw) gems.push(gemBaseName(raw));
   }
 
   return { stats, gems };

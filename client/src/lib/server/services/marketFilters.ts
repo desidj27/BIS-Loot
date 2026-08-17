@@ -1,4 +1,5 @@
 import type { AttributeFilter, MarketListing } from '../darkerdb';
+import { listingSocketIds } from '../darkerdb';
 
 function listingAttributeValues(listing: MarketListing, field: string): number[] {
   const values: number[] = [];
@@ -29,14 +30,13 @@ export function filterListingsByAttributes(
 
 export function sortListingsByPrice(listings: MarketListing[]): MarketListing[] {
   return [...listings].sort((a, b) => {
-    const byUnit = a.price_per_unit - b.price_per_unit;
-    if (byUnit !== 0) return byUnit;
+    const aUnit = a.price_per_unit ?? a.price;
+    const bUnit = b.price_per_unit ?? b.price;
+    if (aUnit !== bUnit) return aUnit - bUnit;
     return a.price - b.price;
   });
 }
 
 export function listingHasGems(listing: MarketListing): boolean {
-  return [listing.socket_1, listing.socket_2, listing.socket_3, listing.socket_4, listing.socket_5].some(
-    (socket) => socket != null && socket !== ''
-  );
+  return listingSocketIds(listing).length > 0;
 }

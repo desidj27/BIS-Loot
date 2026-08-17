@@ -110,9 +110,18 @@ export function extractListingGems(
     .sort();
 
   const gems: ListingGem[] = [];
+  const socketValues = Array.isArray(listing.sockets)
+    ? listing.sockets
+    : [listing.socket_1, listing.socket_2, listing.socket_3, listing.socket_4, listing.socket_5];
 
   for (let socket = 1; socket <= 5; socket++) {
-    const raw = listing[`socket_${socket}` as keyof MarketListing];
+    const rawValue = socketValues[socket - 1];
+    const raw =
+      typeof rawValue === 'string'
+        ? rawValue
+        : rawValue && typeof rawValue === 'object' && 'id' in rawValue
+          ? String((rawValue as { id?: unknown }).id ?? '')
+          : listing[`socket_${socket}` as keyof MarketListing];
     if (typeof raw !== 'string' || !raw) continue;
 
     const statField = secondaryFields[socket - 1];

@@ -35,15 +35,16 @@ interface MerchantJson {
   [merchant: string]: MerchantData | string[];
 }
 
+/** Wiki / DarkerDB suffix keys: item_*_N001 and merchant.json rarity "N". */
 const RARITY_NAMES: Record<number, string> = {
-  0: 'Poor',
-  1: 'Common',
-  2: 'Uncommon',
-  3: 'Rare',
-  4: 'Epic',
-  5: 'Legendary',
-  6: 'Unique',
-  7: 'Artifact',
+  1: 'Poor',
+  2: 'Common',
+  3: 'Uncommon',
+  4: 'Rare',
+  5: 'Epic',
+  6: 'Legendary',
+  7: 'Unique',
+  8: 'Artifact',
 };
 
 function parseIngredient(raw: string): ParsedIngredient {
@@ -99,15 +100,15 @@ export function getCraftMerchants(): string[] {
   return data.craft_order;
 }
 
-/** Craft output tier from merchant.json (e.g. ring tier 3 = Rare). */
+/** Craft output tier from merchant.json (e.g. ring tier 3 = Uncommon, 7 = Unique). */
 export function rarityNumberToName(rarity: number): string {
   return RARITY_NAMES[rarity] ?? 'Unknown';
 }
 
-/** Ingredient suffix in wiki format (e.g. Arcane Essence-4 = Rare essence). */
+/** Ingredient suffix in wiki format (e.g. Arcane Essence-6 = Legendary essence). */
 export function ingredientRarityNumberToName(rarity: number): string {
   if (rarity < 0) return 'Unknown';
-  return RARITY_NAMES[rarity - 1] ?? 'Unknown';
+  return rarityNumberToName(rarity);
 }
 
 export function normalizeItemName(name: string): string {

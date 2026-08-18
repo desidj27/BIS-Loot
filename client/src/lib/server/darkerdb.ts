@@ -334,6 +334,19 @@ function extractCursor(next: string | null | undefined): string | undefined {
   return next;
 }
 
+function sortListingsByUnitPrice(listings: MarketListing[]): MarketListing[] {
+  return [...listings].sort((a, b) => {
+    const aUnit = a.price_per_unit ?? a.price;
+    const bUnit = b.price_per_unit ?? b.price;
+    if (aUnit !== bUnit) return aUnit - bUnit;
+    return a.price - b.price;
+  });
+}
+
+function isNarrowMarketQuery(query: QueryParams): boolean {
+  return Boolean(query.item_id) || (Boolean(query.archetype) && Boolean(query.rarity));
+}
+
 export async function getMarketListings(params: QueryParams = {}): Promise<MarketListing[]> {
   const { order, has_sold, item, rarity, ...rest } = params;
 
@@ -342,9 +355,8 @@ export async function getMarketListings(params: QueryParams = {}): Promise<Marke
     limit: Math.min(Number(rest.limit ?? 100) || 100, 250),
   };
 
-  if (rarity !== undefined) {
-    query.rarity = toApiRarity(String(rarity));
-  }
+  const raritySlug = rarity !== undefined ? toApiRarity(String(rarity)) : undefined;
+  if (raritySlug) query.rarity = raritySlug;
 
   // v2 prefers listing_state; keep has_sold as a compatibility fallback when set.
   if (has_sold === false || has_sold === 'false') {
@@ -353,27 +365,45 @@ export async function getMarketListings(params: QueryParams = {}): Promise<Marke
     query.listing_state = 'sold';
   }
 
-  if (order === 'asc') {
-    query.sort = 'price_per_unit:asc';
-  } else if (order === 'desc') {
-    query.sort = 'created_at:desc';
-  }
-
   // v2 market filters by item_id / archetype; `item` name is resolved when possible.
   if (typeof item === 'string' && item.trim()) {
     const matches = await searchItems(item.trim());
-    const exact =
-      matches.find((entry) => entry.name.toLowerCase() === item.trim().toLowerCase()) ??
-      matches[0];
-    if (exact?.archetype) {
+    const named = matches.filter(
+      (entry) => entry.name.toLowerCase() === item.trim().toLowerCase()
+    );
+    const byRarity = raritySlug
+      ? named.find((entry) => toApiRarity(entry.rarity) === raritySlug)
+      : undefined;
+    const exact = byRarity ?? named[0] ?? matches[0];
+
+    if (byRarity?.id) {
+      query.item_id = byRarity.id;
+      delete query.rarity;
+    } else if (exact?.archetype) {
       query.archetype = exact.archetype;
     } else {
       query.item = item.trim();
     }
   }
 
-  const data = await fetchApi<MarketListing[]>('/v2/market', query);
-  return (data.body ?? []).map(normalizeMarketListing);
+  // Narrow item_id / archetype+rarity queries 400 if sorted by unit price on the API.
+  if (order === 'asc' && !isNarrowMarketQuery(query)) {
+    query.sort = 'price_per_unit:asc';
+  } else if (order === 'desc') {
+    query.sort = 'created_at:desc';
+  }
+
+  let data: ApiResponse<MarketListing[]>;
+  try {
+    data = await fetchApi<MarketListing[]>('/v2/market', query);
+  } catch (error) {
+    if (!query.sort) throw error;
+    delete query.sort;
+    data = await fetchApi<MarketListing[]>('/v2/market', query);
+  }
+
+  const listings = (data.body ?? []).map(normalizeMarketListing);
+  return order === 'asc' ? sortListingsByUnitPrice(listings) : listings;
 }
 
 async function fetchPriceHistoryRaw(
@@ -543,8 +573,6 @@ export async function searchMarketListings(options: MarketSearchOptions = {}): P
 
   if (item?.trim()) params.item = item.trim();
   if (rarity?.trim()) params.rarity = rarity.trim();
-  if (gems === 'gemmed') params.has_gems = true;
-  if (gems === 'no_gems') params.has_gems = false;
 
   const listings = await getMarketListings(params);
   const active = listings.filter((l) => isListingActive(l));

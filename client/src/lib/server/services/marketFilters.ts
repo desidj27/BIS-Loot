@@ -28,6 +28,21 @@ export function filterListingsByAttributes(
   );
 }
 
+export function listingUnitPrice(listing: MarketListing): number {
+  return listing.price_per_unit ?? listing.price;
+}
+
+export function filterListingsByMaxUnitPrice(
+  listings: MarketListing[],
+  maxPrice: number | null | undefined
+): MarketListing[] {
+  if (maxPrice === null || maxPrice === undefined || !Number.isFinite(maxPrice) || maxPrice <= 0) {
+    return listings;
+  }
+
+  return listings.filter((listing) => listingUnitPrice(listing) <= maxPrice);
+}
+
 export function sortListingsByPrice(listings: MarketListing[]): MarketListing[] {
   return [...listings].sort((a, b) => {
     const aUnit = a.price_per_unit ?? a.price;

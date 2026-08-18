@@ -1,12 +1,15 @@
 import type { Metadata } from 'next';
 import Script from 'next/script';
 import { Cinzel, Inter } from 'next/font/google';
+import { Analytics } from '@vercel/analytics/next';
 import { GridBackground } from '@/components/ui/grid-background';
 import { GameDivider } from '@/components/ui/game-panel';
 import AdSlot from '@/components/AdSlot';
 import { adsConfig, isAdConfigured } from '@/lib/ads';
 import BisLootLogo from '@/components/BisLootLogo';
 import SiteNav from '@/components/SiteNav';
+import AuthButtons from '@/components/AuthButtons';
+import WatcherPoller from '@/components/WatcherPoller';
 import './globals.css';
 
 const inter = Inter({
@@ -47,6 +50,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         ) : null}
       </head>
       <body className="font-sans">
+        <WatcherPoller />
         <GridBackground className="flex min-h-screen flex-col">
           <header className="sticky top-0 z-50 border-b border-[#4a4338] bg-[#0c0a09]/95 backdrop-blur-sm supports-[padding:max(0px)]:pt-[max(0.75rem,env(safe-area-inset-top))]">
             <div className="flex w-full flex-col gap-3 px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-4 sm:px-6 sm:py-4 md:px-12 lg:px-16 xl:px-24">
@@ -62,7 +66,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   </p>
                 </div>
               </div>
-              <SiteNav />
+              <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:gap-3">
+                <SiteNav />
+                <AuthButtons />
+              </div>
             </div>
             <GameDivider className="pb-0" />
           </header>
@@ -90,6 +97,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </div>
           </footer>
         </GridBackground>
+        <Analytics />
       </body>
     </html>
   );

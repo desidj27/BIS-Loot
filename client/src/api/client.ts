@@ -1,12 +1,32 @@
 const API_BASE = '/api';
 
+async function parseError(response: Response): Promise<string> {
+  const error = await response.json().catch(() => ({ error: response.statusText }));
+  return error.error || 'Request failed';
+}
+
 async function fetchJson<T>(path: string): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`);
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: response.statusText }));
-    throw new Error(error.error || 'Request failed');
+    throw new Error(await parseError(response));
   }
   return response.json();
+}
+
+async function sendJson<T>(path: string, method: string, body?: unknown): Promise<T> {
+  const response = await fetch(`${API_BASE}${path}`, {
+    method,
+    headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  if (!response.ok) {
+    throw new Error(await parseError(response));
+  }
+  return response.json();
+}
+
+async function postJson<T>(path: string, body: unknown): Promise<T> {
+  return sendJson<T>(path, 'POST', body);
 }
 
 export interface MarketListing {
@@ -153,6 +173,52 @@ export interface CraftCostResult {
   profitPercent: number | null;
 }
 
+export interface SessionUser {
+  id: string;
+  username: string;
+  avatarUrl: string | null;
+}
+
+export interface WatcherPublic {
+  id: string;
+  itemName: string;
+  rarity: string;
+  gems: 'any' | 'gemmed' | 'no_gems';
+  attributes: AttributeFilter[];
+  maxPrice: number | null;
+  enabled: boolean;
+  createdAt: string;
+  lastCheckedAt: string | null;
+  lastNotifiedAt: string | null;
+  lastError: string | null;
+  webhookMasked: string;
+}
+
+export interface WatcherCheckPayload {
+  id: string;
+  itemName: string;
+  rarity: string;
+  gems: 'any' | 'gemmed' | 'no_gems';
+  attributes: AttributeFilter[];
+  maxPrice: number | null;
+  webhookUrl: string;
+  seenListingIds: number[];
+}
+
+export interface WatcherCheckResult {
+  id: string;
+  matchCount: number;
+  notifiedListingIds: number[];
+  matchListingIds: number[];
+  error?: string;
+}
+
+export interface WatcherListResponse {
+  user?: SessionUser;
+  watchers: WatcherPublic[];
+  maxWatchers: number;
+}
+
 export const api = {
   health: () => fetchJson<{ status: string }>('/health'),
   market: (limit = 50) => fetchJson<MarketListing[]>(`/market?limit=${limit}`),
@@ -199,6 +265,31 @@ export const api = {
     fetchJson<CraftCostResult[]>(
       merchant ? `/crafting?merchant=${encodeURIComponent(merchant)}` : '/crafting'
     ),
+  checkWatchers: (watcherId?: string) =>
+    postJson<{ watchers: WatcherPublic[]; results: WatcherCheckResult[] }>(
+      '/watchers/check',
+      watcherId ? { watcherId } : {}
+    ),
+  testWatcherWebhook: (webhookUrl: string, itemName?: string) =>
+    postJson<{ ok: boolean }>('/watchers/test', { webhookUrl, itemName }),
+  session: () => fetchJson<{ user: SessionUser | null }>('/auth/session'),
+  logout: () => postJson<{ ok: boolean }>('/auth/logout', {}),
+  listWatchers: () => fetchJson<WatcherListResponse>('/watchers'),
+  createWatcher: (input: {
+    itemName: string;
+    rarity: string;
+    gems: 'any' | 'gemmed' | 'no_gems';
+    attributes: AttributeFilter[];
+    maxPrice: number | null;
+    webhookUrl: string;
+  }) => postJson<{ watcher: WatcherPublic; watchers: WatcherPublic[]; maxWatchers: number }>(
+    '/watchers',
+    input
+  ),
+  updateWatcher: (id: string, body: { enabled?: boolean; resetSeen?: boolean }) =>
+    sendJson<WatcherListResponse>(`/watchers/${encodeURIComponent(id)}`, 'PATCH', body),
+  deleteWatcher: (id: string) =>
+    sendJson<WatcherListResponse>(`/watchers/${encodeURIComponent(id)}`, 'DELETE'),
 };
 
 export function formatGold(value: number | null | undefined): string {

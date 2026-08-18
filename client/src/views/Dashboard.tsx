@@ -11,6 +11,7 @@ import {
   gameButtonClass,
   gameHeadingClass,
   gameMutedTextClass,
+  gameSidebarClass,
   gameTitleClass,
 } from '@/lib/gameTheme';
 import { fetchCraftCostsForLookup } from '@/lib/craftCost';
@@ -117,12 +118,14 @@ export default function Dashboard() {
       )}
 
       <div className="grid items-start gap-4 sm:gap-6 lg:grid-cols-[280px_1fr]">
-        <MarketFilters
-          filters={filters}
-          onChange={setFilters}
-          onSearch={handleSearch}
-          loading={loading}
-        />
+        <div className={gameSidebarClass}>
+          <MarketFilters
+            filters={filters}
+            onChange={setFilters}
+            onSearch={handleSearch}
+            loading={loading}
+          />
+        </div>
 
         <div className="min-w-0 space-y-4 sm:space-y-6">
           {showCraftPanel && (

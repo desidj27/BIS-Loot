@@ -5,3 +5,4 @@ dist/
 .env.local
 *.log
 .DS_Store
+client/data/user-watchers.json

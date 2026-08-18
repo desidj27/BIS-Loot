@@ -69,6 +69,8 @@ interface MarketFiltersProps {
   onChange: (filters: MarketFilterState) => void;
   onSearch: (filters: MarketFilterState) => void;
   loading?: boolean;
+  submitLabel?: string;
+  showAd?: boolean;
 }
 
 export default function MarketFilters({
@@ -76,6 +78,8 @@ export default function MarketFilters({
   onChange,
   onSearch,
   loading,
+  submitLabel = 'Search Market',
+  showAd = true,
 }: MarketFiltersProps) {
   const [availableAttributes, setAvailableAttributes] = useState<ItemAttributeRange[]>([]);
   const [attributesLoading, setAttributesLoading] = useState(false);
@@ -383,7 +387,7 @@ export default function MarketFilters({
         : null;
 
   return (
-    <GamePanel className="p-3 sm:sticky sm:top-[4.5rem] sm:p-4 lg:top-20">
+    <GamePanel className="p-3 sm:p-4">
       <h3 className={gameHeadingClass}>Market Filters</h3>
       <GameDivider className="px-0" />
 
@@ -642,11 +646,11 @@ export default function MarketFilters({
           disabled={loading}
           onClick={commitSearch}
         >
-          {loading ? 'Searching…' : 'Search Market'}
+          {loading ? 'Searching…' : submitLabel}
         </button>
       </div>
 
-      <AdSlot placement="marketSidebar" format="vertical" className="mt-4" />
+      {showAd ? <AdSlot placement="marketSidebar" format="vertical" className="mt-4" /> : null}
     </GamePanel>
   );
 }

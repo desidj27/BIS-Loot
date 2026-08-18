@@ -9,6 +9,7 @@ import {
   gameHeadingClass,
   gameLabelClass,
   gameMutedTextClass,
+  gameSidebarClass,
   gameTitleClass,
   itemCardRarityClass,
 } from '@/lib/gameTheme';
@@ -69,7 +70,7 @@ export default function Alerts() {
       )}
 
       <div className="grid items-start gap-4 sm:gap-6 lg:grid-cols-[280px_1fr]">
-        <GamePanel className="p-3 sm:sticky sm:top-[4.5rem] sm:p-4 lg:top-20">
+        <GamePanel className={cn('p-3 sm:p-4', gameSidebarClass)}>
           <h3 className={gameHeadingClass}>Deal Settings</h3>
           <GameDivider className="px-0" />
 

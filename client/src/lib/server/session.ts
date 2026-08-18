@@ -14,7 +14,11 @@ export interface SessionUser {
 function authSecret(): string {
   const secret = process.env.AUTH_SECRET?.trim();
   if (!secret) {
-    throw new Error('AUTH_SECRET is not set. Add a random string to client/.env.local');
+    throw new Error(
+      process.env.VERCEL
+        ? 'AUTH_SECRET is not set. Add it in Vercel → Settings → Environment Variables, then redeploy.'
+        : 'AUTH_SECRET is not set. Add a random string to client/.env.local'
+    );
   }
   return secret;
 }
@@ -86,11 +90,43 @@ export async function requireSessionUser(): Promise<SessionUser> {
   return user;
 }
 
-export function discordRedirectUri(requestUrl: string): string {
-  if (process.env.DISCORD_REDIRECT_URI?.trim()) {
-    return process.env.DISCORD_REDIRECT_URI.trim();
+function isLocalhostUrl(value: string): boolean {
+  try {
+    const host = new URL(value).hostname;
+    return host === 'localhost' || host === '127.0.0.1';
+  } catch {
+    return false;
   }
-  return `${new URL(requestUrl).origin}/api/auth/callback/discord`;
+}
+
+export function requestOrigin(request: Request): string {
+  const proto =
+    request.headers.get('x-forwarded-proto')?.split(',')[0]?.trim() ||
+    new URL(request.url).protocol.replace(':', '');
+  const host =
+    request.headers.get('x-forwarded-host')?.split(',')[0]?.trim() ||
+    request.headers.get('host') ||
+    new URL(request.url).host;
+  return `${proto}://${host}`;
+}
+
+export function discordRedirectUri(request: Request): string {
+  const explicit = process.env.DISCORD_REDIRECT_URI?.trim();
+  const onVercel = Boolean(process.env.VERCEL);
+  if (explicit && !(onVercel && isLocalhostUrl(explicit))) {
+    return explicit.replace(/\/$/, '');
+  }
+
+  const site = process.env.DARKERDB_ORIGIN?.trim().replace(/\/$/, '');
+  if (onVercel && site && !isLocalhostUrl(site)) {
+    return `${site}/api/auth/callback/discord`;
+  }
+
+  return `${requestOrigin(request)}/api/auth/callback/discord`;
+}
+
+export function appOrigin(request: Request): string {
+  return new URL(discordRedirectUri(request)).origin;
 }
 
 export function discordAuthorizeUrl(state: string, redirectUri: string): string {
@@ -140,12 +176,25 @@ export async function exchangeDiscordCode(code: string, redirectUri: string): Pr
   });
 
   if (!tokenResponse.ok) {
-    throw new Error('Discord login failed');
+    const body = (await tokenResponse.json().catch(() => ({}))) as {
+      error?: string;
+      error_description?: string;
+    };
+    const reason = body.error || `http_${tokenResponse.status}`;
+    if (reason === 'invalid_client') {
+      throw new Error('Discord client ID or secret is wrong. Check the Vercel env vars, then redeploy.');
+    }
+    if (reason === 'invalid_grant' || /redirect/i.test(body.error_description ?? '')) {
+      throw new Error(
+        'Discord redirect URL mismatch. In the Discord app, add https://www.bisloot.website/api/auth/callback/discord'
+      );
+    }
+    throw new Error(`Discord login failed (${reason})`);
   }
 
   const tokenBody = (await tokenResponse.json()) as DiscordTokenResponse;
   if (!tokenBody.access_token) {
-    throw new Error('Discord login failed');
+    throw new Error('Discord login failed (no access token)');
   }
 
   const userResponse = await fetch('https://discord.com/api/users/@me', {

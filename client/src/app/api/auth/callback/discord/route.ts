@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import {
+  appOrigin,
   cookieOptions,
   discordRedirectUri,
   encodeSession,
@@ -11,7 +12,7 @@ import {
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
-  const origin = url.origin;
+  const origin = appOrigin(request);
   const code = url.searchParams.get('code');
   const state = url.searchParams.get('state');
   const oauthError = url.searchParams.get('error');
@@ -29,12 +30,12 @@ export async function GET(request: Request) {
   }
 
   try {
-    const user = await exchangeDiscordCode(code, discordRedirectUri(request.url));
+    const user = await exchangeDiscordCode(code, discordRedirectUri(request));
     const response = NextResponse.redirect(`${origin}/watchers`);
     response.cookies.set(SESSION_COOKIE, encodeSession(user), cookieOptions());
     response.cookies.set(OAUTH_STATE_COOKIE, '', { ...cookieOptions(0), maxAge: 0 });
     return response;
-  } catch {
-    return fail('Discord login failed');
+  } catch (error) {
+    return fail(error instanceof Error ? error.message : 'Discord login failed');
   }
 }

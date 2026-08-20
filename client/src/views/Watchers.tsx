@@ -42,7 +42,7 @@ export default function Watchers() {
   const [maxPrice, setMaxPrice] = useState('');
   const [webhookUrl, setWebhookUrl] = useState('');
   const [watchers, setWatchers] = useState<WatcherPublic[]>([]);
-  const [maxWatchers, setMaxWatchers] = useState(MAX_WATCHERS_PER_USER);
+  const [maxWatchers, setMaxWatchers] = useState<number | null>(MAX_WATCHERS_PER_USER);
   const [listings, setListings] = useState<MarketListing[]>([]);
   const [attributeLabels, setAttributeLabels] = useState<AttributeLabelMap>(new Map());
   const [loading, setLoading] = useState(false);
@@ -51,7 +51,8 @@ export default function Watchers() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
-  const atLimit = watchers.length >= maxWatchers;
+  const unlimited = maxWatchers == null;
+  const atLimit = !unlimited && watchers.length >= maxWatchers;
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -104,7 +105,7 @@ export default function Watchers() {
     const parsedMax = maxPrice.trim() === '' ? null : Number(maxPrice);
 
     if (atLimit) {
-      setError(`You can watch up to ${maxWatchers} items at a time. Delete one first.`);
+      setError(`You can watch up to ${maxWatchers ?? 'unlimited'} items at a time. Delete one first.`);
       return;
     }
     if (!itemName) {
@@ -141,7 +142,9 @@ export default function Watchers() {
       setMaxWatchers(data.maxWatchers);
       setWebhookUrl('');
       setNotice(
-        `Watcher saved (${data.watchers.length}/${data.maxWatchers}). Discord will ping when a new matching listing appears.`
+        data.maxWatchers == null
+          ? `Watcher saved (${data.watchers.length}). Discord will ping when a new matching listing appears.`
+          : `Watcher saved (${data.watchers.length}/${data.maxWatchers}). Discord will ping when a new matching listing appears.`
       );
     } catch (err) {
       setError((err as Error).message);
@@ -232,8 +235,11 @@ export default function Watchers() {
       <GamePanel className="hidden p-4 sm:block sm:p-6">
         <h2 className={gameTitleClass}>Discord Watchers</h2>
         <p className={cn('mt-1', gameMutedTextClass)}>
-          Signed in as {user.username}. Watch up to {maxWatchers} items. Checks run about every 90
-          seconds while BisLoot is open.
+          Signed in as {user.username}.{' '}
+          {unlimited
+            ? 'No watcher limit on this account.'
+            : `Watch up to ${maxWatchers} items.`}{' '}
+          Checks run about every 5 minutes.
         </p>
       </GamePanel>
 
@@ -317,7 +323,7 @@ export default function Watchers() {
             <div className="flex items-center justify-between gap-3">
               <h3 className={gameHeadingClass}>Active watchers</h3>
               <span className="text-xs text-[#8a7f72]">
-                {watchers.length} / {maxWatchers}
+                {unlimited ? watchers.length : `${watchers.length} / ${maxWatchers}`}
               </span>
             </div>
             <GameDivider className="px-0" />

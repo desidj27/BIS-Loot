@@ -6,6 +6,7 @@ const DARKERDB_ORIGIN =
 
 import { aggregateToWeekly, sanitizePriceHistoryOutliers } from './services/priceHistory';
 import { itemIdsEqual } from './recipes';
+import { withTtlCache } from './ttlCache';
 
 export interface ApiResponse<T> {
   version: string;
@@ -85,11 +86,9 @@ export interface GameItem {
 
 type QueryParams = Record<string, string | number | boolean | undefined>;
 
-const ALL_ITEMS_CACHE_TTL_MS = 60 * 60 * 1000;
+const ALL_ITEMS_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 const SEARCH_ITEMS_CACHE_TTL_MS = 30 * 60 * 1000;
-let allItemsCache: { data: GameItem[]; expiresAt: number } | null = null;
-let allItemsLoadPromise: Promise<GameItem[]> | null = null;
-const searchItemsCache = new Map<string, { data: GameItem[]; expiresAt: number }>();
+const MARKET_LISTINGS_CACHE_TTL_MS = 2 * 60 * 1000;
 
 function getApiKey(): string {
   const key = process.env.DARKERDB_API_KEY?.trim();
@@ -395,11 +394,15 @@ export async function getMarketListings(params: QueryParams = {}): Promise<Marke
 
   let data: ApiResponse<MarketListing[]>;
   try {
-    data = await fetchApi<MarketListing[]>('/v2/market', query);
+    data = await withTtlCache(`market:${JSON.stringify(query)}`, MARKET_LISTINGS_CACHE_TTL_MS, () =>
+      fetchApi<MarketListing[]>('/v2/market', query)
+    );
   } catch (error) {
     if (!query.sort) throw error;
     delete query.sort;
-    data = await fetchApi<MarketListing[]>('/v2/market', query);
+    data = await withTtlCache(`market:${JSON.stringify(query)}`, MARKET_LISTINGS_CACHE_TTL_MS, () =>
+      fetchApi<MarketListing[]>('/v2/market', query)
+    );
   }
 
   const listings = (data.body ?? []).map(normalizeMarketListing);
@@ -591,39 +594,26 @@ export async function searchItems(name: string): Promise<GameItem[]> {
   const trimmed = name.trim();
   if (!trimmed) return [];
 
-  const cacheKey = trimmed.toLowerCase();
-  const cached = searchItemsCache.get(cacheKey);
-  if (cached && cached.expiresAt > Date.now()) {
-    return cached.data;
-  }
-
-  const data = await fetchApi<GameItem | GameItem[]>('/v2/items', {
-    name: trimmed,
-    limit: 200,
+  return withTtlCache(`items:search:${trimmed.toLowerCase()}`, SEARCH_ITEMS_CACHE_TTL_MS, async () => {
+    const data = await fetchApi<GameItem | GameItem[]>('/v2/items', {
+      name: trimmed,
+      limit: 200,
+    });
+    const body = data.body;
+    return (Array.isArray(body) ? body : body ? [body] : []).map(normalizeGameItem);
   });
-  const body = data.body;
-  const items = (Array.isArray(body) ? body : body ? [body] : []).map(normalizeGameItem);
-  searchItemsCache.set(cacheKey, {
-    data: items,
-    expiresAt: Date.now() + SEARCH_ITEMS_CACHE_TTL_MS,
-  });
-  return items;
 }
 
+let allItemsLoadPromise: Promise<GameItem[]> | null = null;
+
 export async function getAllItemsPaginated(): Promise<GameItem[]> {
-  if (allItemsCache && allItemsCache.expiresAt > Date.now()) {
-    return allItemsCache.data;
-  }
+  if (allItemsLoadPromise) return allItemsLoadPromise;
 
-  if (allItemsLoadPromise) {
-    return allItemsLoadPromise;
-  }
-
-  allItemsLoadPromise = loadAllItemsPaginated().then((items) => {
-    allItemsCache = { data: items, expiresAt: Date.now() + ALL_ITEMS_CACHE_TTL_MS };
-    allItemsLoadPromise = null;
-    return items;
-  });
+  allItemsLoadPromise = withTtlCache('items:all', ALL_ITEMS_CACHE_TTL_MS, loadAllItemsPaginated).finally(
+    () => {
+      allItemsLoadPromise = null;
+    }
+  );
 
   return allItemsLoadPromise;
 }

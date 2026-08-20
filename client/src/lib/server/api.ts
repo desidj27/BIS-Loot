@@ -5,7 +5,8 @@ export function jsonOk<T>(data: T, init?: ResponseInit) {
 }
 
 export function jsonError(error: unknown, status = 500) {
-  const message = error instanceof Error ? error.message : 'Request failed';
+  const message =
+    error instanceof Error ? error.message : typeof error === 'string' ? error : 'Request failed';
   const inferred =
     error instanceof Error && typeof (error as Error & { status?: number }).status === 'number'
       ? (error as Error & { status: number }).status

@@ -216,7 +216,7 @@ export interface WatcherCheckResult {
 export interface WatcherListResponse {
   user?: SessionUser;
   watchers: WatcherPublic[];
-  maxWatchers: number;
+  maxWatchers: number | null;
 }
 
 export const api = {
@@ -282,7 +282,7 @@ export const api = {
     attributes: AttributeFilter[];
     maxPrice: number | null;
     webhookUrl: string;
-  }) => postJson<{ watcher: WatcherPublic; watchers: WatcherPublic[]; maxWatchers: number }>(
+  }) => postJson<{ watcher: WatcherPublic; watchers: WatcherPublic[]; maxWatchers: number | null }>(
     '/watchers',
     input
   ),

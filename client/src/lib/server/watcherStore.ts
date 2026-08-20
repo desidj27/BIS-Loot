@@ -1,11 +1,12 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import type { WatcherRule } from '@/lib/watchers';
-import { capSeenListingIds, MAX_WATCHERS_PER_USER } from '@/lib/watchers';
+import { capSeenListingIds, maxWatchersForUser } from '@/lib/watchers';
 
 type StoreShape = Record<string, WatcherRule[]>;
 
 const UPSTASH_PREFIX = 'bisloot:watchers:';
+const UPSTASH_USER_INDEX = 'bisloot:watcher-users';
 
 function fileStorePath(): string {
   if (process.env.WATCHER_STORE_PATH?.trim()) {
@@ -70,8 +71,10 @@ async function writeFileStore(data: StoreShape): Promise<void> {
   await writeFile(path, JSON.stringify(data), 'utf8');
 }
 
-function sanitizeWatchers(watchers: WatcherRule[]): WatcherRule[] {
-  return watchers.slice(0, MAX_WATCHERS_PER_USER).map((watcher) => ({
+function sanitizeWatchers(watchers: WatcherRule[], userId: string): WatcherRule[] {
+  const cap = maxWatchersForUser(userId);
+  const limited = cap == null ? watchers : watchers.slice(0, cap);
+  return limited.map((watcher) => ({
     ...watcher,
     seenListingIds: capSeenListingIds(watcher.seenListingIds ?? []),
   }));
@@ -84,21 +87,65 @@ export async function getUserWatchers(userId: string): Promise<WatcherRule[]> {
     if (typeof raw !== 'string' || !raw) return [];
     try {
       const parsed = JSON.parse(raw) as WatcherRule[];
-      return Array.isArray(parsed) ? sanitizeWatchers(parsed) : [];
+      return Array.isArray(parsed) ? sanitizeWatchers(parsed, userId) : [];
     } catch {
       return [];
     }
   }
 
   const all = await readFileStore();
-  return sanitizeWatchers(all[userId] ?? []);
+  return sanitizeWatchers(all[userId] ?? [], userId);
+}
+
+export async function listWatcherUserIds(): Promise<string[]> {
+  const redis = upstashConfig();
+  if (redis) {
+    const members = await upstashCommand(['SMEMBERS', UPSTASH_USER_INDEX]);
+    if (Array.isArray(members) && members.length > 0) {
+      return members.map((id) => String(id));
+    }
+
+    const ids = new Set<string>();
+    let cursor = '0';
+    for (let i = 0; i < 50; i++) {
+      const scanned = await upstashCommand([
+        'SCAN',
+        cursor,
+        'MATCH',
+        `${UPSTASH_PREFIX}*`,
+        'COUNT',
+        100,
+      ]);
+      if (!Array.isArray(scanned) || scanned.length < 2) break;
+      cursor = String(scanned[0] ?? '0');
+      const keys = Array.isArray(scanned[1]) ? scanned[1] : [];
+      for (const key of keys) {
+        const id = String(key).slice(UPSTASH_PREFIX.length);
+        if (id) ids.add(id);
+      }
+      if (cursor === '0') break;
+    }
+
+    const listed = [...ids];
+    if (listed.length > 0) {
+      await upstashCommand(['SADD', UPSTASH_USER_INDEX, ...listed]);
+    }
+    return listed;
+  }
+
+  return Object.keys(await readFileStore());
 }
 
 export async function setUserWatchers(userId: string, watchers: WatcherRule[]): Promise<WatcherRule[]> {
-  const next = sanitizeWatchers(watchers);
+  const next = sanitizeWatchers(watchers, userId);
 
   if (upstashConfig()) {
     await upstashCommand(['SET', `${UPSTASH_PREFIX}${userId}`, JSON.stringify(next)]);
+    if (next.length === 0) {
+      await upstashCommand(['SREM', UPSTASH_USER_INDEX, userId]);
+    } else {
+      await upstashCommand(['SADD', UPSTASH_USER_INDEX, userId]);
+    }
     return next;
   }
 

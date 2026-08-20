@@ -2,7 +2,14 @@ import type { AttributeFilter, WatcherCheckPayload, WatcherCheckResult } from '@
 import type { GemStatus } from '@/lib/marketFilters';
 
 export const MAX_WATCHERS_PER_USER = 3;
+export const WATCHER_CHECK_INTERVAL_MS = 5 * 60 * 1000;
 const MAX_SEEN_IDS = 250;
+
+const UNLIMITED_WATCHER_USER_IDS = new Set(['229349039089385473']);
+
+export function maxWatchersForUser(userId: string): number | null {
+  return UNLIMITED_WATCHER_USER_IDS.has(userId) ? null : MAX_WATCHERS_PER_USER;
+}
 
 export interface WatcherRule {
   id: string;

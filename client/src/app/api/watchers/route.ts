@@ -4,7 +4,7 @@ import { isDiscordWebhookUrl } from '@/lib/server/services/watchers';
 import { createWatcherId, seedAndSaveWatcher } from '@/lib/server/services/watcherRunner';
 import { toPublicWatcher } from '@/lib/server/services/watcherPublic';
 import { getUserWatchers } from '@/lib/server/watcherStore';
-import { MAX_WATCHERS_PER_USER, type WatcherRule } from '@/lib/watchers';
+import { maxWatchersForUser, type WatcherRule } from '@/lib/watchers';
 
 export async function GET() {
   try {
@@ -13,7 +13,7 @@ export async function GET() {
     return jsonOk({
       user,
       watchers: watchers.map(toPublicWatcher),
-      maxWatchers: MAX_WATCHERS_PER_USER,
+      maxWatchers: maxWatchersForUser(user.id),
     });
   } catch (error) {
     return jsonError(error);
@@ -24,8 +24,9 @@ export async function POST(request: Request) {
   try {
     const user = await requireSessionUser();
     const current = await getUserWatchers(user.id);
-    if (current.length >= MAX_WATCHERS_PER_USER) {
-      return jsonError(`You can watch up to ${MAX_WATCHERS_PER_USER} items at a time`, 400);
+    const cap = maxWatchersForUser(user.id);
+    if (cap != null && current.length >= cap) {
+      return jsonError(`You can watch up to ${cap} items at a time`, 400);
     }
 
     const body = (await request.json()) as Partial<WatcherRule>;
@@ -72,7 +73,7 @@ export async function POST(request: Request) {
     return jsonOk({
       watcher: saved.watcher,
       watchers: saved.watchers,
-      maxWatchers: MAX_WATCHERS_PER_USER,
+      maxWatchers: maxWatchersForUser(user.id),
     });
   } catch (error) {
     return jsonError(error);

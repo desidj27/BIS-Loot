@@ -28,6 +28,7 @@ export default function Dashboard() {
   const [attributeLabels, setAttributeLabels] = useState<AttributeLabelMap>(new Map());
   const [craftCosts, setCraftCosts] = useState<CraftCostResult[]>([]);
   const [craftLoading, setCraftLoading] = useState(false);
+  const [craftRequested, setCraftRequested] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -50,29 +51,11 @@ export default function Dashboard() {
       }
       setError(null);
 
-      const itemName = searchFilters.itemName.trim();
-      const listingsPromise = fetchMarketListings(searchFilters);
-      const craftPromise = itemName
-        ? fetchCraftCostsForLookup(itemName, searchFilters.rarity || undefined)
-        : Promise.resolve([] as CraftCostResult[]);
-
-      if (itemName) {
-        setCraftLoading(true);
-      } else {
-        setCraftCosts([]);
-        setCraftLoading(false);
-      }
-
-      const [data, costs] = await Promise.all([
-        listingsPromise,
-        craftPromise.catch(() => [] as CraftCostResult[]),
-      ]);
+      const data = await fetchMarketListings(searchFilters);
       if (generation !== searchGenerationRef.current) return;
 
       setListings(data);
       setHasSearched(true);
-      setCraftCosts(costs);
-      setCraftLoading(false);
     } catch (err) {
       if (generation !== searchGenerationRef.current) return;
       setError((err as Error).message);
@@ -89,6 +72,28 @@ export default function Dashboard() {
   useEffect(() => {
     runSearch(defaultMarketFilters);
   }, [runSearch]);
+
+  useEffect(() => {
+    setCraftCosts([]);
+    setCraftRequested(false);
+    setCraftLoading(false);
+  }, [filters.itemName, filters.rarity]);
+
+  async function loadCraftCosts() {
+    const itemName = filters.itemName.trim();
+    if (!itemName) return;
+
+    setCraftRequested(true);
+    setCraftLoading(true);
+    try {
+      const costs = await fetchCraftCostsForLookup(itemName, filters.rarity || undefined);
+      setCraftCosts(costs);
+    } catch {
+      setCraftCosts([]);
+    } finally {
+      setCraftLoading(false);
+    }
+  }
 
   function handleSearch(searchFilters: MarketFilterState) {
     setFilters(searchFilters);
@@ -128,10 +133,22 @@ export default function Dashboard() {
         </div>
 
         <div className="min-w-0 space-y-4 sm:space-y-6">
+          {filters.itemName.trim() && !craftRequested ? (
+            <button
+              type="button"
+              className={cn(gameButtonClass, 'w-full sm:w-auto')}
+              onClick={() => void loadCraftCosts()}
+            >
+              Load craft cost
+            </button>
+          ) : null}
+
           {showCraftPanel && (
             <div className="space-y-4">
               {craftLoading && craftCosts.length === 0 ? (
                 <CraftCostPanel craftCost={null} loading={craftLoading} />
+              ) : craftRequested && !craftLoading && craftCosts.length === 0 ? (
+                <p className={gameMutedTextClass}>No craft recipe for this item.</p>
               ) : (
                 craftCosts.map((cost) => (
                   <CraftCostPanel key={cost.id} craftCost={cost} loading={craftLoading} />

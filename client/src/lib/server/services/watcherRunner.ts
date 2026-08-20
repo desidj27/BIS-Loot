@@ -1,20 +1,43 @@
 import type { WatcherCheckResult } from '@/api/client';
 import type { WatcherRule } from '@/lib/watchers';
-import { applyCheckResults, toCheckPayload } from '@/lib/watchers';
-import { getUserWatchers, setUserWatchers } from '../watcherStore';
+import { applyCheckResults, toCheckPayload, WATCHER_CHECK_INTERVAL_MS } from '@/lib/watchers';
+import { getUserWatchers, listWatcherUserIds, setUserWatchers } from '../watcherStore';
 import { findWatcherMatches, notifyWatcherMatches } from './watchers';
 import { toPublicWatcher, type WatcherPublic } from './watcherPublic';
 
 export type { WatcherPublic };
 
+function recentlyChecked(watchers: WatcherRule[]): boolean {
+  const enabled = watchers.filter((watcher) => watcher.enabled);
+  if (enabled.length === 0) return true;
+  return enabled.every((watcher) => {
+    if (!watcher.lastCheckedAt) return false;
+    const checkedAt = Date.parse(watcher.lastCheckedAt);
+    return Number.isFinite(checkedAt) && Date.now() - checkedAt < WATCHER_CHECK_INTERVAL_MS * 0.9;
+  });
+}
+
 export async function checkStoredWatchers(
   userId: string,
-  options: { watcherId?: string; dryRun?: boolean } = {}
-): Promise<{ watchers: WatcherPublic[]; results: WatcherCheckResult[] }> {
+  options: { watcherId?: string; dryRun?: boolean; force?: boolean } = {}
+): Promise<{ watchers: WatcherPublic[]; results: WatcherCheckResult[]; skipped: boolean }> {
   const watchers = await getUserWatchers(userId);
   const selected = options.watcherId
     ? watchers.filter((watcher) => watcher.id === options.watcherId)
     : watchers.filter((watcher) => watcher.enabled);
+
+  if (
+    !options.force &&
+    !options.watcherId &&
+    !options.dryRun &&
+    recentlyChecked(watchers)
+  ) {
+    return {
+      watchers: watchers.map(toPublicWatcher),
+      results: [],
+      skipped: true,
+    };
+  }
 
   const results: WatcherCheckResult[] = [];
   for (const watcher of selected) {
@@ -46,7 +69,26 @@ export async function checkStoredWatchers(
   return {
     watchers: saved.map(toPublicWatcher),
     results,
+    skipped: false,
   };
+}
+
+export async function checkAllUsersWatchers(): Promise<{
+  users: number;
+  checked: number;
+  skipped: number;
+}> {
+  const userIds = await listWatcherUserIds();
+  let checked = 0;
+  let skipped = 0;
+
+  for (const userId of userIds) {
+    const result = await checkStoredWatchers(userId);
+    if (result.skipped) skipped += 1;
+    else checked += 1;
+  }
+
+  return { users: userIds.length, checked, skipped };
 }
 
 export function createWatcherId(): string {

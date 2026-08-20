@@ -3,8 +3,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { api } from '@/api/client';
 import { useSessionUser } from '@/lib/sessionClient';
-
-const POLL_MS = 90_000;
+import { WATCHER_CHECK_INTERVAL_MS } from '@/lib/watchers';
 
 export default function WatcherPoller() {
   const { user } = useSessionUser();
@@ -27,19 +26,10 @@ export default function WatcherPoller() {
     if (!user) return undefined;
 
     void runCheck();
-    const interval = window.setInterval(() => void runCheck(), POLL_MS);
-
-    function onVisible() {
-      if (document.visibilityState === 'visible') void runCheck();
-    }
-
-    document.addEventListener('visibilitychange', onVisible);
-    window.addEventListener('focus', onVisible);
+    const interval = window.setInterval(() => void runCheck(), WATCHER_CHECK_INTERVAL_MS);
 
     return () => {
       window.clearInterval(interval);
-      document.removeEventListener('visibilitychange', onVisible);
-      window.removeEventListener('focus', onVisible);
     };
   }, [user, runCheck]);
 

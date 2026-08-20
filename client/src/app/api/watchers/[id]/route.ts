@@ -2,7 +2,7 @@ import { jsonError, jsonOk } from '@/lib/server/api';
 import { requireSessionUser } from '@/lib/server/session';
 import { toPublicWatcher } from '@/lib/server/services/watcherPublic';
 import { getUserWatchers, setUserWatchers } from '@/lib/server/watcherStore';
-import { MAX_WATCHERS_PER_USER } from '@/lib/watchers';
+import { maxWatchersForUser } from '@/lib/watchers';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -27,7 +27,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     const saved = await setUserWatchers(user.id, next);
     return jsonOk({
       watchers: saved.map(toPublicWatcher),
-      maxWatchers: MAX_WATCHERS_PER_USER,
+      maxWatchers: maxWatchersForUser(user.id),
     });
   } catch (error) {
     return jsonError(error);
@@ -45,7 +45,7 @@ export async function DELETE(_request: Request, context: RouteContext) {
     );
     return jsonOk({
       watchers: saved.map(toPublicWatcher),
-      maxWatchers: MAX_WATCHERS_PER_USER,
+      maxWatchers: maxWatchersForUser(user.id),
     });
   } catch (error) {
     return jsonError(error);

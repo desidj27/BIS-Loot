@@ -114,11 +114,13 @@ export default function Dashboard() {
   const itemSearch = filters.itemName.trim();
   const marketNotice =
     itemSearch && marketMeta?.freshness?.status === 'stale'
-      ? `DarkerDB's market scan for this item is stale${
+      ? `DarkerDB only has ${marketMeta.total ?? listings.length} active listing${
+          (marketMeta.total ?? listings.length) === 1 ? '' : 's'
+        } indexed for this item right now, and their scan is stale${
           marketMeta.freshness.age_seconds
             ? ` (about ${Math.max(1, Math.round(marketMeta.freshness.age_seconds / 60))} min old)`
             : ''
-        }. In-game listings may not appear here yet.`
+        }. BisLoot shows everything DarkerDB returns — the in-game market can have many more until DarkerDB rescans.`
       : null;
   const listingCountLabel =
     marketMeta?.total != null && marketMeta.total > listings.length

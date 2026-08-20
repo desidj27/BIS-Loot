@@ -1,3 +1,5 @@
-'use client';
+import { redirect } from 'next/navigation';
 
-export { default } from '@/views/Alerts';
+export default function AlertsPage() {
+  redirect('/');
+}

@@ -50,6 +50,7 @@ export default function Watchers() {
   const [testing, setTesting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [storageWarning, setStorageWarning] = useState<string | null>(null);
 
   const unlimited = maxWatchers == null;
   const atLimit = !unlimited && watchers.length >= maxWatchers;
@@ -73,6 +74,11 @@ export default function Watchers() {
       const data = await api.listWatchers();
       setWatchers(data.watchers);
       setMaxWatchers(data.maxWatchers);
+      setStorageWarning(
+        data.storage === 'ephemeral'
+          ? 'Watchers are not persisted on this deployment. Add UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN in Vercel, then redeploy.'
+          : null
+      );
     } catch (err) {
       setError((err as Error).message);
     }
@@ -86,7 +92,7 @@ export default function Watchers() {
     try {
       setLoading(true);
       setError(null);
-      const data = await fetchMarketListings(searchFilters);
+      const { listings: data } = await fetchMarketListings(searchFilters);
       const parsedMax = maxPrice.trim() === '' ? null : Number(maxPrice);
       const priced =
         parsedMax !== null && Number.isFinite(parsedMax)
@@ -243,6 +249,11 @@ export default function Watchers() {
         </p>
       </GamePanel>
 
+      {storageWarning && (
+        <div className="border border-[#8a7355]/50 bg-[#241c14]/80 px-4 py-3 text-sm text-[#e5b56e]">
+          {storageWarning}
+        </div>
+      )}
       {error && (
         <div className="border border-red-900/50 bg-red-950/30 px-4 py-3 text-sm text-red-300">
           {error}

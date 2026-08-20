@@ -77,6 +77,21 @@ export interface MarketSearchParams {
   attributes?: AttributeFilter[];
 }
 
+export interface MarketFreshness {
+  status?: string;
+  age_seconds?: number;
+  num_listings?: number;
+  scan_completed_at?: string;
+}
+
+export interface MarketSearchResponse {
+  listings: MarketListing[];
+  meta?: {
+    total?: number;
+    freshness?: MarketFreshness;
+  };
+}
+
 export interface PriceHistoryPoint {
   timestamp: string;
   item_id: string;
@@ -217,6 +232,7 @@ export interface WatcherListResponse {
   user?: SessionUser;
   watchers: WatcherPublic[];
   maxWatchers: number | null;
+  storage?: 'redis' | 'local' | 'ephemeral';
 }
 
 export const api = {
@@ -231,7 +247,7 @@ export const api = {
     if (params.attributes?.length) {
       query.set('attributes', JSON.stringify(params.attributes));
     }
-    return fetchJson<MarketListing[]>(`/market/search?${query.toString()}`);
+    return fetchJson<MarketSearchResponse>(`/market/search?${query.toString()}`);
   },
   itemAttributes: () => fetchJson<ItemAttribute[]>('/items/attributes'),
   itemAttributeRanges: (item: string, rarity?: string) => {

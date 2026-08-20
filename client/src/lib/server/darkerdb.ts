@@ -21,6 +21,13 @@ export interface ApiResponse<T> {
     total?: number;
     next?: string | null;
     cursor?: number | string;
+    freshness?: {
+      status?: string;
+      age_seconds?: number;
+      num_listings?: number;
+      scan_completed_at?: string;
+      scan_started_at?: string;
+    };
   };
 }
 
@@ -346,67 +353,169 @@ function isNarrowMarketQuery(query: QueryParams): boolean {
   return Boolean(query.item_id) || (Boolean(query.archetype) && Boolean(query.rarity));
 }
 
-export async function getMarketListings(params: QueryParams = {}): Promise<MarketListing[]> {
+export interface MarketFreshness {
+  status?: string;
+  age_seconds?: number;
+  num_listings?: number;
+  scan_completed_at?: string;
+}
+
+export interface MarketQueryMeta {
+  total?: number;
+  freshness?: MarketFreshness;
+}
+
+const MAX_MARKET_PAGES = 20;
+
+async function fetchMarketApi(query: QueryParams): Promise<ApiResponse<MarketListing[]>> {
+  try {
+    return await fetchApi<MarketListing[]>('/v2/market', query);
+  } catch (error) {
+    if (!query.sort) throw error;
+    const retry = { ...query };
+    delete retry.sort;
+    return fetchApi<MarketListing[]>('/v2/market', retry);
+  }
+}
+
+async function loadMarketListings(
+  query: QueryParams,
+  maxResults: number,
+  order?: string | number | boolean
+): Promise<{ listings: MarketListing[]; meta: MarketQueryMeta }> {
+  const listings: MarketListing[] = [];
+  const seen = new Set<number>();
+  let meta: MarketQueryMeta = {};
+  let page = 1;
+  let cursor: string | undefined;
+
+  while (listings.length < maxResults && page <= MAX_MARKET_PAGES) {
+    const pageQuery: QueryParams = {
+      ...query,
+      limit: Math.min(250, maxResults - listings.length),
+    };
+    if (cursor) {
+      pageQuery.cursor = cursor;
+      delete pageQuery.page;
+    } else if (page > 1) {
+      pageQuery.page = page;
+    }
+
+    const data = await fetchMarketApi(pageQuery);
+    if (data.pagination) {
+      if (query.item_id && typeof data.pagination.total === 'number') {
+        meta.total = data.pagination.total;
+      } else if (query.item_id && typeof data.pagination.freshness?.num_listings === 'number') {
+        meta.total = data.pagination.freshness.num_listings;
+      }
+      if (data.pagination.freshness) {
+        meta.freshness = data.pagination.freshness;
+      }
+    }
+
+    const batch = (data.body ?? []).map(normalizeMarketListing);
+    for (const listing of batch) {
+      if (seen.has(listing.id)) continue;
+      seen.add(listing.id);
+      listings.push(listing);
+      if (listings.length >= maxResults) break;
+    }
+
+    if (listings.length >= maxResults) break;
+
+    const next = extractCursor(data.pagination?.next);
+    if (!next || batch.length === 0) break;
+    cursor = next;
+    page += 1;
+  }
+
+  const sorted = order === 'asc' ? sortListingsByUnitPrice(listings) : listings;
+  return { listings: sorted, meta };
+}
+
+function resolveItemMarketQuery(
+  item: string,
+  raritySlug: string | undefined,
+  query: QueryParams,
+  matches: GameItem[]
+): void {
+  const named = matches.filter((entry) => entry.name.toLowerCase() === item.toLowerCase());
+  const byRarity = raritySlug
+    ? named.find((entry) => toApiRarity(entry.rarity) === raritySlug)
+    : undefined;
+
+  if (byRarity?.id) {
+    query.item_id = byRarity.id;
+    delete query.rarity;
+    return;
+  }
+
+  if (named.length === 1 && named[0]?.id) {
+    query.item_id = named[0].id;
+    delete query.rarity;
+    return;
+  }
+
+  if (named[0]?.archetype) {
+    query.archetype = named[0].archetype;
+    return;
+  }
+
+  if (matches[0]?.archetype) {
+    query.archetype = matches[0].archetype;
+  }
+}
+
+async function buildMarketQuery(params: QueryParams = {}): Promise<{
+  query: QueryParams;
+  order?: string | number | boolean;
+  maxResults: number;
+}> {
   const { order, has_sold, item, rarity, ...rest } = params;
+  const maxResults = Math.min(Number(rest.limit ?? 100) || 100, 250);
 
   const query: QueryParams = {
     ...rest,
-    limit: Math.min(Number(rest.limit ?? 100) || 100, 250),
+    limit: maxResults,
   };
 
   const raritySlug = rarity !== undefined ? toApiRarity(String(rarity)) : undefined;
   if (raritySlug) query.rarity = raritySlug;
 
-  // v2 prefers listing_state; keep has_sold as a compatibility fallback when set.
   if (has_sold === false || has_sold === 'false') {
     query.listing_state = 'active';
   } else if (has_sold === true || has_sold === 'true') {
     query.listing_state = 'sold';
   }
 
-  // v2 market filters by item_id / archetype; `item` name is resolved when possible.
   if (typeof item === 'string' && item.trim()) {
     const matches = await searchItems(item.trim());
-    const named = matches.filter(
-      (entry) => entry.name.toLowerCase() === item.trim().toLowerCase()
-    );
-    const byRarity = raritySlug
-      ? named.find((entry) => toApiRarity(entry.rarity) === raritySlug)
-      : undefined;
-    const exact = byRarity ?? named[0] ?? matches[0];
-
-    if (byRarity?.id) {
-      query.item_id = byRarity.id;
-      delete query.rarity;
-    } else if (exact?.archetype) {
-      query.archetype = exact.archetype;
-    } else {
-      query.item = item.trim();
-    }
+    resolveItemMarketQuery(item.trim(), raritySlug, query, matches);
   }
 
-  // Narrow item_id / archetype+rarity queries 400 if sorted by unit price on the API.
   if (order === 'asc' && !isNarrowMarketQuery(query)) {
     query.sort = 'price_per_unit:asc';
   } else if (order === 'desc') {
     query.sort = 'created_at:desc';
   }
 
-  let data: ApiResponse<MarketListing[]>;
-  try {
-    data = await withTtlCache(`market:${JSON.stringify(query)}`, MARKET_LISTINGS_CACHE_TTL_MS, () =>
-      fetchApi<MarketListing[]>('/v2/market', query)
-    );
-  } catch (error) {
-    if (!query.sort) throw error;
-    delete query.sort;
-    data = await withTtlCache(`market:${JSON.stringify(query)}`, MARKET_LISTINGS_CACHE_TTL_MS, () =>
-      fetchApi<MarketListing[]>('/v2/market', query)
-    );
-  }
+  return { query, order, maxResults };
+}
 
-  const listings = (data.body ?? []).map(normalizeMarketListing);
-  return order === 'asc' ? sortListingsByUnitPrice(listings) : listings;
+export async function getMarketListingsWithMeta(
+  params: QueryParams = {}
+): Promise<{ listings: MarketListing[]; meta: MarketQueryMeta }> {
+  const { query, order, maxResults } = await buildMarketQuery(params);
+  const cacheKey = `market:${JSON.stringify({ query, maxResults })}`;
+
+  return withTtlCache(cacheKey, MARKET_LISTINGS_CACHE_TTL_MS, () =>
+    loadMarketListings(query, maxResults, order)
+  );
+}
+
+export async function getMarketListings(params: QueryParams = {}): Promise<MarketListing[]> {
+  const { listings } = await getMarketListingsWithMeta(params);
+  return listings;
 }
 
 async function fetchPriceHistoryRaw(
@@ -565,8 +674,10 @@ export async function getSoldMarketListings(options: MarketSearchOptions = {}): 
   return listings.filter((l) => isListingSold(l));
 }
 
-export async function searchMarketListings(options: MarketSearchOptions = {}): Promise<MarketListing[]> {
-  const { item, rarity, gems = 'any', limit = 100 } = options;
+export async function searchMarketListingsWithMeta(
+  options: MarketSearchOptions = {}
+): Promise<{ listings: MarketListing[]; meta: MarketQueryMeta }> {
+  const { item, rarity, gems = 'any', limit = 250 } = options;
 
   const params: QueryParams = {
     limit,
@@ -577,17 +688,21 @@ export async function searchMarketListings(options: MarketSearchOptions = {}): P
   if (item?.trim()) params.item = item.trim();
   if (rarity?.trim()) params.rarity = rarity.trim();
 
-  const listings = await getMarketListings(params);
-  const active = listings.filter((l) => isListingActive(l));
+  const { listings, meta } = await getMarketListingsWithMeta(params);
+  let active = listings.filter((l) => isListingActive(l));
 
   if (gems === 'gemmed') {
-    return active.filter((listing) => listingSocketIds(listing).length > 0);
-  }
-  if (gems === 'no_gems') {
-    return active.filter((listing) => listingSocketIds(listing).length === 0);
+    active = active.filter((listing) => listingSocketIds(listing).length > 0);
+  } else if (gems === 'no_gems') {
+    active = active.filter((listing) => listingSocketIds(listing).length === 0);
   }
 
-  return active;
+  return { listings: active, meta };
+}
+
+export async function searchMarketListings(options: MarketSearchOptions = {}): Promise<MarketListing[]> {
+  const { listings } = await searchMarketListingsWithMeta(options);
+  return listings;
 }
 
 export async function searchItems(name: string): Promise<GameItem[]> {

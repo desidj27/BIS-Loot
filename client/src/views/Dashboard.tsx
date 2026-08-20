@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { api, CraftCostResult } from '@/api/client';
+import { api, CraftCostResult, MarketListing, type MarketFreshness } from '@/api/client';
 import CraftCostPanel from '@/components/CraftCostPanel';
 import MarketFilters from '@/components/MarketFilters';
 import MarketListingCard from '@/components/MarketListingCard';
@@ -24,7 +24,11 @@ import { buildAttributeLabelMap, type AttributeLabelMap } from '@/lib/listingSta
 
 export default function Dashboard() {
   const [filters, setFilters] = useState<MarketFilterState>(defaultMarketFilters);
-  const [listings, setListings] = useState<Awaited<ReturnType<typeof fetchMarketListings>>>([]);
+  const [listings, setListings] = useState<MarketListing[]>([]);
+  const [marketMeta, setMarketMeta] = useState<{
+    total?: number;
+    freshness?: MarketFreshness;
+  } | null>(null);
   const [attributeLabels, setAttributeLabels] = useState<AttributeLabelMap>(new Map());
   const [craftCosts, setCraftCosts] = useState<CraftCostResult[]>([]);
   const [craftLoading, setCraftLoading] = useState(false);
@@ -51,10 +55,11 @@ export default function Dashboard() {
       }
       setError(null);
 
-      const data = await fetchMarketListings(searchFilters);
+      const { listings: results, meta } = await fetchMarketListings(searchFilters);
       if (generation !== searchGenerationRef.current) return;
 
-      setListings(data);
+      setListings(results);
+      setMarketMeta(meta ?? null);
       setHasSearched(true);
     } catch (err) {
       if (generation !== searchGenerationRef.current) return;
@@ -106,6 +111,19 @@ export default function Dashboard() {
 
   const showCraftPanel = craftLoading || craftCosts.length > 0;
   const showSearchLoading = loading && !refreshing;
+  const itemSearch = filters.itemName.trim();
+  const marketNotice =
+    itemSearch && marketMeta?.freshness?.status === 'stale'
+      ? `DarkerDB's market scan for this item is stale${
+          marketMeta.freshness.age_seconds
+            ? ` (about ${Math.max(1, Math.round(marketMeta.freshness.age_seconds / 60))} min old)`
+            : ''
+        }. In-game listings may not appear here yet.`
+      : null;
+  const listingCountLabel =
+    marketMeta?.total != null && marketMeta.total > listings.length
+      ? `${listings.length} / ${marketMeta.total} listings`
+      : `${listings.length} listings`;
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -115,6 +133,12 @@ export default function Dashboard() {
           Browse and filter active marketplace listings from DarkerDB.
         </p>
       </GamePanel>
+
+      {marketNotice && (
+        <div className="border border-[#8a7355]/50 bg-[#241c14]/80 px-4 py-3 text-sm text-[#e5b56e]">
+          {marketNotice}
+        </div>
+      )}
 
       {error && (
         <div className="border border-red-900/50 bg-red-950/30 px-4 py-3 text-sm text-red-300">
@@ -172,7 +196,7 @@ export default function Dashboard() {
                   {refreshing ? 'Refreshing…' : 'Refresh'}
                 </button>
                 <span className="shrink-0 border border-[#4a4338] bg-[#0a0908] px-3 py-1 text-xs text-[#8a7f72] sm:py-0.5">
-                  {listings.length} listings
+                  {listingCountLabel}
                 </span>
               </div>
             </div>

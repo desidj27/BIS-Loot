@@ -3,7 +3,7 @@ import { requireSessionUser } from '@/lib/server/session';
 import { isDiscordWebhookUrl } from '@/lib/server/services/watchers';
 import { createWatcherId, seedAndSaveWatcher } from '@/lib/server/services/watcherRunner';
 import { toPublicWatcher } from '@/lib/server/services/watcherPublic';
-import { getUserWatchers } from '@/lib/server/watcherStore';
+import { getUserWatchers, watcherStorageMode } from '@/lib/server/watcherStore';
 import { maxWatchersForUser, type WatcherRule } from '@/lib/watchers';
 
 export async function GET() {
@@ -14,6 +14,7 @@ export async function GET() {
       user,
       watchers: watchers.map(toPublicWatcher),
       maxWatchers: maxWatchersForUser(user.id),
+      storage: watcherStorageMode(),
     });
   } catch (error) {
     return jsonError(error);

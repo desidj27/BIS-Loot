@@ -7,7 +7,6 @@ import { cn } from '@/lib/utils';
 const NAV_ITEMS = [
   { href: '/', label: 'Market', exact: true },
   { href: '/watchers', label: 'Watchers', exact: false },
-  { href: '/alerts', label: 'Deals', exact: false },
 ] as const;
 
 export default function SiteNav() {

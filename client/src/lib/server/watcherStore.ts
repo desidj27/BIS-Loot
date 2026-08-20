@@ -25,6 +25,14 @@ function upstashConfig(): { url: string; token: string } | null {
   return { url: url.replace(/\/$/, ''), token };
 }
 
+export type WatcherStorageMode = 'redis' | 'local' | 'ephemeral';
+
+export function watcherStorageMode(): WatcherStorageMode {
+  if (upstashConfig()) return 'redis';
+  if (process.env.VERCEL) return 'ephemeral';
+  return 'local';
+}
+
 async function upstashCommand(command: unknown[]): Promise<unknown> {
   const config = upstashConfig();
   if (!config) return null;

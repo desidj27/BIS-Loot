@@ -149,7 +149,7 @@ export function buildMarketSearchQuery(filters: MarketFilterState): MarketSearch
     item: filters.itemName.trim() || undefined,
     rarity: filters.rarity || undefined,
     gems: filters.gems,
-    limit: 100,
+    limit: 250,
     attributes: filters.attributes.length > 0 ? filters.attributes : undefined,
   };
 }
@@ -212,11 +212,13 @@ export function filterListingsByAttributes(
   );
 }
 
-export async function fetchMarketListings(filters: MarketFilterState): Promise<MarketListing[]> {
+export async function fetchMarketListings(filters: MarketFilterState) {
   const params = buildMarketSearchQuery(filters);
-  const listings = await api.marketSearch(params);
-  if (!params.attributes?.length) return listings;
-  return filterListingsByAttributes(listings, params.attributes);
+  const { listings, meta } = await api.marketSearch(params);
+  const filtered = params.attributes?.length
+    ? filterListingsByAttributes(listings, params.attributes)
+    : listings;
+  return { listings: filtered, meta };
 }
 
 export async function loadItemAttributeRanges(

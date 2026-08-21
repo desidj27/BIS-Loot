@@ -114,3 +114,30 @@ export async function seedAndSaveWatcher(
     watchers: publicWatchers,
   };
 }
+
+/** Update an existing watcher in place and re-seed seen listings for the new criteria. */
+export async function replaceAndSeedWatcher(
+  userId: string,
+  watcher: WatcherRule
+): Promise<{ watcher: WatcherPublic; watchers: WatcherPublic[] }> {
+  const matches = await findWatcherMatches(toCheckPayload(watcher));
+  const seeded: WatcherRule = {
+    ...watcher,
+    seenListingIds: matches.map((listing) => listing.id),
+    lastCheckedAt: new Date().toISOString(),
+    lastError: null,
+  };
+  const current = await getUserWatchers(userId);
+  if (!current.some((entry) => entry.id === seeded.id)) {
+    throw Object.assign(new Error('Watcher not found'), { status: 404 });
+  }
+  const saved = await setUserWatchers(
+    userId,
+    current.map((entry) => (entry.id === seeded.id ? seeded : entry))
+  );
+  const publicWatchers = saved.map(toPublicWatcher);
+  return {
+    watcher: publicWatchers.find((entry) => entry.id === seeded.id) ?? toPublicWatcher(seeded),
+    watchers: publicWatchers,
+  };
+}

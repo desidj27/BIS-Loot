@@ -21,9 +21,9 @@ export const gameTitleClass =
 
 export const gameMutedTextClass = 'text-sm text-[#8a7f72]';
 
-/** Stick the filter column only in the two-column layout, and scroll it inside the viewport. */
+/** Stick the filter column in the two-column layout; scroll inside if taller than the viewport. */
 export const gameSidebarClass =
-  'lg:sticky lg:top-20 lg:z-10 lg:max-h-[calc(100dvh-5.5rem)] lg:self-start lg:overflow-y-auto lg:overscroll-contain';
+  'lg:sticky lg:top-[5.75rem] lg:z-10 lg:max-h-[calc(100dvh-6.5rem)] lg:self-start lg:overflow-y-auto lg:overscroll-contain lg:pb-2';
 
 function rarityLookupKey(rarity: string): string {
   if (!rarity) return '';

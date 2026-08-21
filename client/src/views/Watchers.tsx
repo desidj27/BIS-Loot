@@ -41,6 +41,7 @@ export default function Watchers() {
   const [filters, setFilters] = useState<MarketFilterState>(defaultMarketFilters);
   const [maxPrice, setMaxPrice] = useState('');
   const [webhookUrl, setWebhookUrl] = useState('');
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [watchers, setWatchers] = useState<WatcherPublic[]>([]);
   const [maxWatchers, setMaxWatchers] = useState<number | null>(MAX_WATCHERS_PER_USER);
   const [listings, setListings] = useState<MarketListing[]>([]);
@@ -54,6 +55,9 @@ export default function Watchers() {
 
   const unlimited = maxWatchers == null;
   const atLimit = !unlimited && watchers.length >= maxWatchers;
+  const editingWatcher = editingId
+    ? watchers.find((watcher) => watcher.id === editingId) ?? null
+    : null;
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -105,6 +109,33 @@ export default function Watchers() {
       setLoading(false);
     }
   }, [maxPrice]);
+
+  function resetForm() {
+    setFilters(defaultMarketFilters);
+    setMaxPrice('');
+    setWebhookUrl('');
+    setEditingId(null);
+  }
+
+  function beginEdit(watcher: WatcherPublic) {
+    setEditingId(watcher.id);
+    setFilters({
+      itemName: watcher.itemName,
+      rarity: watcher.rarity || '',
+      gems: watcher.gems,
+      attributes: watcher.attributes.map((attr) => ({ ...attr })),
+    });
+    setMaxPrice(watcher.maxPrice != null ? String(watcher.maxPrice) : '');
+    setWebhookUrl('');
+    setError(null);
+    setNotice(`Editing “${watcher.itemName}”. Leave the webhook blank to keep ${watcher.webhookMasked}.`);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function cancelEdit() {
+    resetForm();
+    setNotice(null);
+  }
 
   async function handleCreate() {
     const itemName = filters.itemName.trim();
@@ -159,9 +190,56 @@ export default function Watchers() {
     }
   }
 
+  async function handleSaveEdit() {
+    if (!editingId) return;
+
+    const itemName = filters.itemName.trim();
+    const parsedMax = maxPrice.trim() === '' ? null : Number(maxPrice);
+
+    if (!itemName) {
+      setError('Pick an item to watch.');
+      return;
+    }
+    if (parsedMax !== null && (!Number.isFinite(parsedMax) || parsedMax <= 0)) {
+      setError('Max price must be a positive number.');
+      return;
+    }
+    if (parsedMax === null && filters.attributes.length === 0) {
+      setError('Set a max price, or add at least one roll filter.');
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+    setNotice(null);
+
+    try {
+      const data = await api.updateWatcher(editingId, {
+        itemName,
+        rarity: filters.rarity,
+        gems: filters.gems,
+        attributes: filters.attributes,
+        maxPrice: parsedMax,
+        ...(webhookUrl.trim() ? { webhookUrl: webhookUrl.trim() } : {}),
+      });
+      setWatchers(data.watchers);
+      setMaxWatchers(data.maxWatchers);
+      resetForm();
+      setNotice('Watcher updated. Current matches were marked as seen so you only get new pings.');
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function handleTestWebhook() {
     if (!webhookUrl.trim()) {
-      setError('Paste a Discord webhook URL to test.');
+      setError(
+        editingId
+          ? 'Paste a Discord webhook URL to test, or leave blank when saving to keep the current one.'
+          : 'Paste a Discord webhook URL to test.'
+      );
       return;
     }
 
@@ -205,6 +283,10 @@ export default function Watchers() {
   async function handleDelete(id: string) {
     const data = await api.deleteWatcher(id);
     setWatchers(data.watchers);
+    if (editingId === id) {
+      resetForm();
+      setNotice(null);
+    }
   }
 
   async function handleResetSeen(id: string) {
@@ -277,7 +359,7 @@ export default function Watchers() {
           />
 
           <GamePanel className="p-3 sm:p-4">
-            <h3 className={gameHeadingClass}>Notify</h3>
+            <h3 className={gameHeadingClass}>{editingId ? 'Edit notify' : 'Notify'}</h3>
             <GameDivider className="px-0" />
 
             <label className="flex flex-col gap-1.5">
@@ -298,13 +380,19 @@ export default function Watchers() {
               <input
                 type="password"
                 autoComplete="off"
-                placeholder="https://discord.com/api/webhooks/…"
+                placeholder={
+                  editingWatcher
+                    ? `Leave blank to keep ${editingWatcher.webhookMasked}`
+                    : 'https://discord.com/api/webhooks/…'
+                }
                 className={gameInputClass}
                 value={webhookUrl}
                 onChange={(e) => setWebhookUrl(e.target.value)}
               />
               <span className="text-[11px] text-[#8a7f72]">
-                Channel Settings → Integrations → Webhooks. Stored on your BisLoot account.
+                {editingId
+                  ? 'Only paste a new URL if you want to change the webhook.'
+                  : 'Channel Settings → Integrations → Webhooks. Stored on your BisLoot account.'}
               </span>
             </label>
 
@@ -317,15 +405,36 @@ export default function Watchers() {
               >
                 {testing ? 'Sending…' : 'Test ping'}
               </button>
+              {editingId ? (
+                <button
+                  type="button"
+                  className={cn(gameButtonPrimaryClass, 'w-auto px-3')}
+                  disabled={saving}
+                  onClick={() => void handleSaveEdit()}
+                >
+                  {saving ? 'Saving…' : 'Save changes'}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className={cn(gameButtonPrimaryClass, 'w-auto px-3')}
+                  disabled={saving || atLimit}
+                  onClick={() => void handleCreate()}
+                >
+                  {saving ? 'Saving…' : atLimit ? 'Limit reached' : 'Create watcher'}
+                </button>
+              )}
+            </div>
+            {editingId ? (
               <button
                 type="button"
-                className={cn(gameButtonPrimaryClass, 'w-auto px-3')}
-                disabled={saving || atLimit}
-                onClick={() => void handleCreate()}
+                className={cn(gameButtonClass, 'mt-2 w-full')}
+                disabled={saving}
+                onClick={cancelEdit}
               >
-                {saving ? 'Saving…' : atLimit ? 'Limit reached' : 'Create watcher'}
+                Cancel edit
               </button>
-            </div>
+            ) : null}
           </GamePanel>
         </div>
 
@@ -347,11 +456,22 @@ export default function Watchers() {
             ) : (
               <ul className="space-y-3">
                 {watchers.map((watcher) => (
-                  <li key={watcher.id} className="border border-[#3a342c] bg-[#0a0908] p-3">
+                  <li
+                    key={watcher.id}
+                    className={cn(
+                      'border bg-[#0a0908] p-3',
+                      editingId === watcher.id ? 'border-[#8a7355]' : 'border-[#3a342c]'
+                    )}
+                  >
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div className="min-w-0">
                         <p className={cn('font-[Cinzel] font-semibold', itemCardRarityClass(watcher.rarity || 'Common'))}>
                           {watcher.itemName}
+                          {editingId === watcher.id ? (
+                            <span className="ml-2 text-[10px] font-normal uppercase tracking-wide text-[#e5b56e]">
+                              Editing
+                            </span>
+                          ) : null}
                         </p>
                         <p className="mt-1 text-xs text-[#8a7f72]">{summarizeWatcher(watcher)}</p>
                         <p className="mt-1 text-[11px] text-[#6b6258]">{watcher.webhookMasked}</p>
@@ -373,6 +493,13 @@ export default function Watchers() {
                       <p className="mt-1 text-xs text-red-300">{watcher.lastError}</p>
                     ) : null}
                     <div className="mt-3 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        className={gameButtonClass}
+                        onClick={() => beginEdit(watcher)}
+                      >
+                        Edit
+                      </button>
                       <button type="button" className={gameButtonClass} onClick={() => void handleToggle(watcher)}>
                         {watcher.enabled ? 'Pause' : 'Resume'}
                       </button>

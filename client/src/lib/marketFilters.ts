@@ -145,11 +145,13 @@ export const defaultMarketFilters: MarketFilterState = {
 };
 
 export function buildMarketSearchQuery(filters: MarketFilterState): MarketSearchParams {
+  const item = filters.itemName.trim() || undefined;
   return {
-    item: filters.itemName.trim() || undefined,
+    item,
     rarity: filters.rarity || undefined,
     gems: filters.gems,
-    limit: 250,
+    // Browse feed: recent listings. Item search: more results, cheapest first.
+    limit: item ? 250 : 50,
     attributes: filters.attributes.length > 0 ? filters.attributes : undefined,
   };
 }

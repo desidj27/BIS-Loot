@@ -117,7 +117,13 @@ export default function MarketFilters({
           setAvailableRarities(rarities);
 
           const current = filtersRef.current;
-          if (current.rarity && !rarities.includes(current.rarity)) {
+          if (rarities.length === 1) {
+            if (current.rarity !== rarities[0]) {
+              const next = { ...current, rarity: rarities[0] };
+              filtersRef.current = next;
+              onChange(next);
+            }
+          } else if (current.rarity && !rarities.includes(current.rarity)) {
             const next = { ...current, rarity: '' };
             filtersRef.current = next;
             onChange(next);

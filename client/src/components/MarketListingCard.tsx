@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { MarketListing } from '@/api/client';
 import { cn } from '@/lib/utils';
@@ -40,6 +41,12 @@ export default function MarketListingCard({ listing, attributeLabels }: MarketLi
   const primaryStats = stats.filter((stat) => stat.slot === 'primary');
   const secondaryStats = stats.filter((stat) => stat.slot === 'secondary');
   const gemsByStat = new Map(extractListingGems(listing, attributeLabels).map((gem) => [gem.statKey, gem]));
+  const title =
+    listing.item?.trim() ||
+    (typeof listing.name === 'string' ? listing.name.trim() : '') ||
+    listing.item_id?.replace(/^id\.item\./i, '').replace(/_\d{3,4}$/, '').replace(/_/g, ' ') ||
+    'Unknown item';
+  const [iconFailed, setIconFailed] = useState(false);
 
   return (
     <article
@@ -51,27 +58,27 @@ export default function MarketListingCard({ listing, attributeLabels }: MarketLi
     >
       <div className="border-b border-[#2a241c] bg-[#171411]/90 px-3 pb-3 pt-3 text-center sm:px-4 sm:pb-3 sm:pt-4">
         <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center border border-[#4a4338] bg-[#0a0908] p-1.5 sm:mb-3 sm:h-14 sm:w-14">
-          <img
-            src={listingIconUrl(listing.item_id)}
-            alt={listing.item}
-            loading="lazy"
-            className="max-h-full max-w-full object-contain [image-rendering:pixelated]"
-            onError={(e) => {
-              e.currentTarget.style.display = 'none';
-              e.currentTarget.nextElementSibling?.classList.remove('hidden');
-            }}
-          />
-          <span className="hidden text-xl text-neutral-600">⚔</span>
+          {!iconFailed && listing.item_id ? (
+            <img
+              src={listingIconUrl(listing.item_id)}
+              alt={title}
+              loading="lazy"
+              className="max-h-full max-w-full object-contain [image-rendering:pixelated]"
+              onError={() => setIconFailed(true)}
+            />
+          ) : (
+            <span className="text-xl text-neutral-600">?</span>
+          )}
         </div>
 
         <Link
-          href={`/item/${listing.item_id}`}
+          href={listing.item_id ? `/item/${listing.item_id}` : '#'}
           className={cn(
             'block truncate font-[Cinzel] text-[15px] font-semibold tracking-wide no-underline hover:no-underline sm:text-base',
             itemCardRarityClass(listing.rarity)
           )}
         >
-          {listing.item}
+          {title}
         </Link>
         <TitleDivider />
       </div>

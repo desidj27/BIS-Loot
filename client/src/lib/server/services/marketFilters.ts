@@ -52,6 +52,15 @@ export function sortListingsByPrice(listings: MarketListing[]): MarketListing[] 
   });
 }
 
+export function sortListingsByNewest(listings: MarketListing[]): MarketListing[] {
+  return [...listings].sort((a, b) => {
+    const aTime = Date.parse(a.created_at) || 0;
+    const bTime = Date.parse(b.created_at) || 0;
+    if (aTime !== bTime) return bTime - aTime;
+    return b.id - a.id;
+  });
+}
+
 export function listingHasGems(listing: MarketListing): boolean {
   return listingSocketIds(listing).length > 0;
 }

@@ -44,7 +44,7 @@ export default function ItemDetail() {
   const [itemMeta, setItemMeta] = useState<{ archetype: string; rarity: string } | null>(null);
   const [craftCost, setCraftCost] = useState<CraftCostResult | null>(null);
   const [craftLoading, setCraftLoading] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [historyLoading, setHistoryLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -52,61 +52,63 @@ export default function ItemDetail() {
 
     let cancelled = false;
 
-    async function load() {
+    async function loadItem() {
       try {
-        setLoading(true);
-        const itemData = await api.getItem(itemId!).catch(() => null);
-        const lookupId = itemData?.archetype ?? itemId!;
+        setCraftLoading(true);
+        setError(null);
 
-        const [historyData, summaryData] = await Promise.all([
-          api.priceHistory(itemId!, interval),
-          api.priceSummary(lookupId),
+        const [itemData, summaryData, craftData] = await Promise.all([
+          api.getItem(itemId!).catch(() => null),
+          api.priceSummary(itemId!),
+          api.craftCostForItem(itemId!).catch(() => null),
         ]);
 
-        if (!cancelled) {
-          setHistory(historyData);
-          setSummary(summaryData);
-          setItemName(itemData?.name ?? itemId!);
-          setItemMeta(
-            itemData ? { archetype: itemData.archetype, rarity: itemData.rarity } : null
-          );
-          setError(null);
-        }
+        if (cancelled) return;
+
+        setSummary(summaryData);
+        setItemName(itemData?.name ?? itemId!);
+        setItemMeta(itemData ? { archetype: itemData.archetype, rarity: itemData.rarity } : null);
+        setCraftCost(craftData);
       } catch (err) {
         if (!cancelled) setError((err as Error).message);
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setCraftLoading(false);
+        }
       }
     }
 
-    load();
+    loadItem();
     return () => {
       cancelled = true;
     };
-  }, [itemId, interval]);
+  }, [itemId]);
 
   useEffect(() => {
     if (!itemId) return;
 
     let cancelled = false;
 
-    async function loadCraftCost() {
+    async function loadHistory() {
       try {
-        setCraftLoading(true);
-        const data = await api.craftCostForItem(itemId!);
-        if (!cancelled) setCraftCost(data);
-      } catch {
-        if (!cancelled) setCraftCost(null);
+        setHistoryLoading(true);
+        const historyData = await api.priceHistory(itemId!, interval);
+        if (!cancelled) {
+          setHistory(historyData);
+          setError(null);
+        }
+      } catch (err) {
+        if (!cancelled) setError((err as Error).message);
       } finally {
-        if (!cancelled) setCraftLoading(false);
+        if (!cancelled) setHistoryLoading(false);
       }
     }
 
-    loadCraftCost();
+    loadHistory();
     return () => {
       cancelled = true;
     };
-  }, [itemId]);
+  }, [itemId, interval]);
 
   const latest = [...history].reverse().find((point) => point.avg != null && point.avg > 0);
   const avgVol = averageVolume(history);
@@ -202,7 +204,7 @@ export default function ItemDetail() {
           </div>
         </div>
         <GameDivider />
-        <PriceChart data={history} loading={loading} interval={interval} />
+        <PriceChart data={history} loading={historyLoading} interval={interval} />
       </GamePanel>
     </div>
   );

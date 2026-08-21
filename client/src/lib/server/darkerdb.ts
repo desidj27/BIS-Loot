@@ -96,6 +96,7 @@ type QueryParams = Record<string, string | number | boolean | undefined>;
 const ALL_ITEMS_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 const SEARCH_ITEMS_CACHE_TTL_MS = 30 * 60 * 1000;
 const MARKET_LISTINGS_CACHE_TTL_MS = 2 * 60 * 1000;
+const PRICE_HISTORY_CACHE_TTL_MS = 5 * 60 * 1000;
 
 function getApiKey(): string {
   const key = process.env.DARKERDB_API_KEY?.trim();
@@ -266,20 +267,35 @@ function socketsFromListing(listing: MarketListing): Partial<MarketListing> {
   };
 }
 
+function displayNameFromItemId(itemId: string | null | undefined): string {
+  if (!itemId || typeof itemId !== 'string') return '';
+  const slug = itemId
+    .replace(/^id\.item\./i, '')
+    .replace(/_\d{3,4}$/, '')
+    .replace(/_/g, ' ')
+    .trim();
+  if (!slug) return '';
+  return slug.replace(/\b([a-z])/g, (_, c: string) => c.toUpperCase());
+}
+
 function normalizeMarketListing(listing: MarketListing): MarketListing {
   const active = isListingActive(listing);
   const sold = isListingSold(listing);
-  const name =
-    (typeof listing.item === 'string' && listing.item) ||
-    (typeof listing.name === 'string' && listing.name) ||
+  const rawName =
+    (typeof listing.name === 'string' && listing.name.trim()) ||
+    (typeof listing.item === 'string' && listing.item.trim()) ||
     '';
+  const itemId = typeof listing.item_id === 'string' ? listing.item_id : '';
+  const name = rawName || displayNameFromItemId(itemId) || 'Unknown item';
 
   return {
     ...listing,
     ...flattenListingAttributes(listing),
     ...socketsFromListing(listing),
     rarity: toDisplayRarity(listing.rarity),
+    item_id: itemId,
     item: name,
+    name,
     has_sold: active ? false : sold,
     has_expired: active
       ? false
@@ -328,16 +344,29 @@ async function fetchApi<T>(path: string, params: QueryParams = {}): Promise<ApiR
   return response.json() as Promise<ApiResponse<T>>;
 }
 
-function extractCursor(next: string | null | undefined): string | undefined {
-  if (!next) return undefined;
+function extractPaginationContinue(
+  next: string | null | undefined
+): { cursor?: string; page?: number } | null {
+  if (!next) return null;
+
   try {
     if (next.includes('://') || next.startsWith('/')) {
-      return new URL(next, DARKERDB_BASE).searchParams.get('cursor') ?? next;
+      const url = new URL(next, DARKERDB_BASE);
+      const cursor = url.searchParams.get('cursor');
+      if (cursor) return { cursor };
+
+      const pageRaw = url.searchParams.get('page');
+      if (pageRaw) {
+        const page = Number(pageRaw);
+        if (Number.isFinite(page) && page > 0) return { page };
+      }
+      return null;
     }
   } catch {
-    // fall through
+    // fall through to bare token
   }
-  return next;
+
+  return { cursor: next };
 }
 
 function sortListingsByUnitPrice(listings: MarketListing[]): MarketListing[] {
@@ -423,10 +452,18 @@ async function loadMarketListings(
 
     if (listings.length >= maxResults) break;
 
-    const next = extractCursor(data.pagination?.next);
-    if (!next || batch.length === 0) break;
-    cursor = next;
-    page += 1;
+    const cont = extractPaginationContinue(data.pagination?.next ?? undefined);
+    if (!cont || batch.length === 0) break;
+
+    if (cont.cursor) {
+      cursor = cont.cursor;
+      page += 1;
+    } else if (cont.page) {
+      cursor = undefined;
+      page = cont.page;
+    } else {
+      break;
+    }
   }
 
   const sorted = order === 'asc' ? sortListingsByUnitPrice(listings) : listings;
@@ -518,16 +555,58 @@ export async function getMarketListings(params: QueryParams = {}): Promise<Marke
   return listings;
 }
 
+function toNullableNumber(value: unknown): number | null {
+  if (value == null || value === '') return null;
+  const n = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function normalizePriceHistoryPoint(
+  point: Record<string, unknown>,
+  fallbackItemId: string
+): PriceHistoryPoint {
+  return {
+    timestamp: String(point.timestamp ?? ''),
+    item_id: String(point.item_id ?? fallbackItemId),
+    avg: toNullableNumber(point.avg),
+    min: toNullableNumber(point.min),
+    max: toNullableNumber(point.max),
+    volume: toNullableNumber(point.volume) ?? 0,
+  };
+}
+
+function unwrapPriceHistoryBody(
+  body: unknown,
+  fallbackItemId: string
+): PriceHistoryPoint[] {
+  if (Array.isArray(body)) {
+    return body.map((point) =>
+      normalizePriceHistoryPoint(point as Record<string, unknown>, fallbackItemId)
+    );
+  }
+
+  if (body && typeof body === 'object') {
+    const series = (body as { series?: unknown }).series;
+    if (Array.isArray(series)) {
+      return series.map((point) =>
+        normalizePriceHistoryPoint(point as Record<string, unknown>, fallbackItemId)
+      );
+    }
+  }
+
+  return [];
+}
+
 async function fetchPriceHistoryRaw(
   itemId: string,
   interval: string,
   extraParams: QueryParams = {}
 ): Promise<PriceHistoryPoint[]> {
-  const data = await fetchApi<PriceHistoryPoint[]>(
+  const data = await fetchApi<unknown>(
     `/v2/market/analytics/${encodeURIComponent(itemId)}/prices/history`,
     { interval, ...extraParams }
   );
-  return data.body ?? [];
+  return unwrapPriceHistoryBody(data.body, itemId);
 }
 
 async function fetchDailyHistory(itemId: string): Promise<PriceHistoryPoint[]> {
@@ -564,6 +643,11 @@ async function fetchHistoryWithFallback(
   const direct = await fetchPriceHistoryRaw(idOrArchetype, interval);
   if (direct.length > 0) return direct;
 
+  // Concrete item ids usually don't need archetype variant scanning.
+  if (/^id\.item\./i.test(idOrArchetype)) {
+    return [];
+  }
+
   const item = await getItem(idOrArchetype);
   if (item && item.id !== idOrArchetype) {
     const byItem = await fetchPriceHistoryRaw(item.id, interval);
@@ -579,22 +663,43 @@ async function fetchHistoryWithFallback(
   return [];
 }
 
+export function getFairPriceFromHistory(history: PriceHistoryPoint[]): number | null {
+  if (history.length === 0) return null;
+  const recent = history.slice(-24).filter((p) => p.avg != null && p.avg > 0);
+  if (recent.length === 0) return null;
+
+  const totalVolume = recent.reduce((sum, p) => sum + p.volume, 0);
+  if (totalVolume === 0) {
+    return recent[recent.length - 1]?.avg ?? null;
+  }
+
+  const weighted = recent.reduce((sum, p) => sum + (p.avg as number) * p.volume, 0);
+  return Math.round(weighted / totalVolume);
+}
+
 export async function getPriceHistory(
   idOrArchetype: string,
   interval: string = '1h'
 ): Promise<PriceHistoryPoint[]> {
-  if (interval === '1w') {
-    let daily = await fetchDailyHistory(idOrArchetype);
-    if (daily.length === 0) {
-      const resolvedId = await resolveItemIdForHistory(idOrArchetype);
-      if (resolvedId) {
-        daily = await fetchDailyHistory(resolvedId);
+  return withTtlCache(
+    // v2: DarkerDB now returns { series: [...] } instead of a bare array.
+    `history:v2:${idOrArchetype}:${interval}`,
+    PRICE_HISTORY_CACHE_TTL_MS,
+    async () => {
+      if (interval === '1w') {
+        let daily = await fetchDailyHistory(idOrArchetype);
+        if (daily.length === 0 && !/^id\.item\./i.test(idOrArchetype)) {
+          const resolvedId = await resolveItemIdForHistory(idOrArchetype);
+          if (resolvedId) {
+            daily = await fetchDailyHistory(resolvedId);
+          }
+        }
+        return sanitizePriceHistoryOutliers(aggregateToWeekly(daily));
       }
-    }
-    return sanitizePriceHistoryOutliers(aggregateToWeekly(daily));
-  }
 
-  return sanitizePriceHistoryOutliers(await fetchHistoryWithFallback(idOrArchetype, interval));
+      return sanitizePriceHistoryOutliers(await fetchHistoryWithFallback(idOrArchetype, interval));
+    }
+  );
 }
 
 export async function getItemsByArchetype(archetype: string): Promise<GameItem[]> {
@@ -678,14 +783,16 @@ export async function searchMarketListingsWithMeta(
   options: MarketSearchOptions = {}
 ): Promise<{ listings: MarketListing[]; meta: MarketQueryMeta }> {
   const { item, rarity, gems = 'any', limit = 250 } = options;
+  const hasItem = Boolean(item?.trim());
 
+  // Browse / front page: newest listings. Item search: cheapest first.
   const params: QueryParams = {
     limit,
-    order: 'asc',
+    order: hasItem ? 'asc' : 'desc',
     has_sold: false,
   };
 
-  if (item?.trim()) params.item = item.trim();
+  if (hasItem) params.item = item!.trim();
   if (rarity?.trim()) params.rarity = rarity.trim();
 
   const { listings, meta } = await getMarketListingsWithMeta(params);
@@ -736,18 +843,29 @@ export async function getAllItemsPaginated(): Promise<GameItem[]> {
 async function loadAllItemsPaginated(): Promise<GameItem[]> {
   const items: GameItem[] = [];
   let cursor: string | undefined;
+  let page = 1;
 
   while (true) {
-    const data = await fetchApi<GameItem[]>('/v2/items', {
+    const params: QueryParams = {
       limit: 200,
-      ...(cursor ? { cursor } : {}),
-    });
+      ...(cursor ? { cursor } : page > 1 ? { page } : {}),
+    };
+    const data = await fetchApi<GameItem[]>('/v2/items', params);
     const body = data.body ?? [];
     items.push(...body.map(normalizeGameItem));
 
-    const next = extractCursor(data.pagination?.next ?? undefined);
-    if (!next) break;
-    cursor = next;
+    const cont = extractPaginationContinue(data.pagination?.next ?? undefined);
+    if (!cont || body.length === 0) break;
+
+    if (cont.cursor) {
+      cursor = cont.cursor;
+      page += 1;
+    } else if (cont.page) {
+      cursor = undefined;
+      page = cont.page;
+    } else {
+      break;
+    }
   }
 
   return items;
@@ -798,19 +916,7 @@ export async function getLowestListingPriceForItem(
 }
 
 export async function getFairPrice(archetype: string): Promise<number | null> {
-  const history = await getPriceHistory(archetype, '1h');
-  if (history.length === 0) return null;
-
-  const recent = history.slice(-24).filter((p) => p.avg != null && p.avg > 0);
-  if (recent.length === 0) return null;
-
-  const totalVolume = recent.reduce((sum, p) => sum + p.volume, 0);
-  if (totalVolume === 0) {
-    return recent[recent.length - 1]?.avg ?? null;
-  }
-
-  const weighted = recent.reduce((sum, p) => sum + (p.avg as number) * p.volume, 0);
-  return Math.round(weighted / totalVolume);
+  return getFairPriceFromHistory(await getPriceHistory(archetype, '1h'));
 }
 
 export function darkerdbItemIconUrl(itemId: string): string {

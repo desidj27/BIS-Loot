@@ -17,7 +17,20 @@
   }
 
   body {
-    @apply overflow-x-hidden bg-[#080706] text-[#ddd6cb] antialiased;
+    /* clip avoids horizontal bleed without creating a scroll container (which breaks position:sticky). */
+    @apply overflow-x-clip bg-[#080706] text-[#ddd6cb] antialiased;
+    user-select: none;
+    -webkit-user-select: none;
+    caret-color: transparent;
+  }
+
+  input,
+  textarea,
+  select,
+  [contenteditable='true'] {
+    user-select: text;
+    -webkit-user-select: text;
+    caret-color: auto;
   }
 
   a {

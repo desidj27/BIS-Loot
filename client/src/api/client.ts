@@ -77,6 +77,30 @@ export interface MarketSearchParams {
   attributes?: AttributeFilter[];
 }
 
+export interface MarketTrendItem {
+  itemId: string;
+  name: string;
+  rarity: string;
+  archetype: string;
+  tradeCount: number;
+  unitsTraded: number;
+  avgSoldPrice: number | null;
+  volume: number;
+  latestAvg: number | null;
+  previousAvg: number | null;
+  changePct: number | null;
+  changeAbs: number | null;
+}
+
+export interface MarketTrendsResponse {
+  window: '1d' | '1w';
+  generatedAt: string;
+  sampleSize: number;
+  popular: MarketTrendItem[];
+  gainers: MarketTrendItem[];
+  losers: MarketTrendItem[];
+}
+
 export interface MarketFreshness {
   status?: string;
   age_seconds?: number;
@@ -249,6 +273,8 @@ export const api = {
     }
     return fetchJson<MarketSearchResponse>(`/market/search?${query.toString()}`);
   },
+  marketPopular: (window: '1d' | '1w' = '1d') =>
+    fetchJson<MarketTrendsResponse>(`/market/popular?window=${window}`),
   itemAttributes: () => fetchJson<ItemAttribute[]>('/items/attributes'),
   itemAttributeRanges: (item: string, rarity?: string) => {
     const query = new URLSearchParams({ item });
@@ -302,8 +328,23 @@ export const api = {
     '/watchers',
     input
   ),
-  updateWatcher: (id: string, body: { enabled?: boolean; resetSeen?: boolean }) =>
-    sendJson<WatcherListResponse>(`/watchers/${encodeURIComponent(id)}`, 'PATCH', body),
+  updateWatcher: (
+    id: string,
+    body: {
+      enabled?: boolean;
+      resetSeen?: boolean;
+      itemName?: string;
+      rarity?: string;
+      gems?: 'any' | 'gemmed' | 'no_gems';
+      attributes?: AttributeFilter[];
+      maxPrice?: number | null;
+      webhookUrl?: string;
+    }
+  ) => sendJson<WatcherListResponse & { watcher?: WatcherPublic }>(
+    `/watchers/${encodeURIComponent(id)}`,
+    'PATCH',
+    body
+  ),
   deleteWatcher: (id: string) =>
     sendJson<WatcherListResponse>(`/watchers/${encodeURIComponent(id)}`, 'DELETE'),
 };

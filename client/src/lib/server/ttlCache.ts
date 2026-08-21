@@ -1,4 +1,5 @@
 const memory = new Map<string, { value: unknown; expiresAt: number }>();
+const inflight = new Map<string, Promise<unknown>>();
 const PREFIX = 'bisloot:cache:';
 
 function upstashConfig(): { url: string; token: string } | null {
@@ -36,21 +37,35 @@ export async function withTtlCache<T>(
     return local.value as T;
   }
 
-  const redisKey = `${PREFIX}${key}`;
-  const raw = await upstashCommand(['GET', redisKey]);
-  if (typeof raw === 'string' && raw) {
-    try {
-      const parsed = JSON.parse(raw) as T;
-      memory.set(key, { value: parsed, expiresAt: now + ttlMs });
-      return parsed;
-    } catch {
-      // fall through to reload
-    }
+  const pending = inflight.get(key);
+  if (pending) {
+    return pending as Promise<T>;
   }
 
-  const value = await load();
-  memory.set(key, { value, expiresAt: now + ttlMs });
-  const ttlSec = Math.max(1, Math.ceil(ttlMs / 1000));
-  void upstashCommand(['SET', redisKey, JSON.stringify(value), 'EX', ttlSec]);
-  return value;
+  const work = (async () => {
+    const redisKey = `${PREFIX}${key}`;
+    const raw = await upstashCommand(['GET', redisKey]);
+    if (typeof raw === 'string' && raw) {
+      try {
+        const parsed = JSON.parse(raw) as T;
+        memory.set(key, { value: parsed, expiresAt: Date.now() + ttlMs });
+        return parsed;
+      } catch {
+        // fall through to reload
+      }
+    }
+
+    const value = await load();
+    memory.set(key, { value, expiresAt: Date.now() + ttlMs });
+    const ttlSec = Math.max(1, Math.ceil(ttlMs / 1000));
+    void upstashCommand(['SET', redisKey, JSON.stringify(value), 'EX', ttlSec]);
+    return value;
+  })();
+
+  inflight.set(key, work);
+  try {
+    return await work;
+  } finally {
+    inflight.delete(key);
+  }
 }
